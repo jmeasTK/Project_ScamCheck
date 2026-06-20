@@ -102,6 +102,41 @@ interface Analysis {
   usedFallback?: boolean;
 }
 
+function getIndicatorBaseQuote(quote: string) {
+  return quote.split("->")[0]?.trim().toLowerCase() || quote.trim().toLowerCase();
+}
+
+function mergeRelatedIndicators(indicators: Indicator[]) {
+  const merged = new Map<string, Indicator>();
+
+  for (const indicator of indicators) {
+    const quote = indicator.quote.trim();
+    if (!quote) continue;
+
+    const key = getIndicatorBaseQuote(quote);
+    const existing = merged.get(key);
+
+    if (!existing) {
+      merged.set(key, { quote, reason: indicator.reason.trim() });
+      continue;
+    }
+
+    const preferredQuote = quote.includes("->") && !existing.quote.includes("->") ? quote : existing.quote;
+    const reasons = [existing.reason, indicator.reason.trim()].filter(Boolean);
+    const uniqueReasons = Array.from(new Set(reasons));
+
+    merged.set(key, {
+      quote: preferredQuote,
+      reason: uniqueReasons.join(" "),
+    });
+  }
+
+  return Array.from(merged.values());
+}
+
+function getIndicatorQuotes(indicators: Indicator[]) {
+  return mergeRelatedIndicators(indicators).map((item) => getIndicatorBaseQuote(item.quote));
+}
 function normalizeVietnamese(text: string) {
   return text
     .normalize("NFD")
@@ -245,13 +280,14 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
 
   const risk: Exclude<Risk, null> = score >= 55 ? "high" : score >= 25 ? "medium" : "low";
   const label = risk === "high" ? "Nguy hiểm" : risk === "medium" ? "Nghi ngờ" : "An toàn";
-  const highlights = indicators.map((item) => item.quote).filter(Boolean);
+  const mergedIndicators = mergeRelatedIndicators(indicators);
+  const highlights = getIndicatorQuotes(mergedIndicators);
 
   return {
     risk,
     label,
     highlights,
-    indicators,
+    indicators: mergedIndicators,
     detective: risk === "high"
       ? "Bộ phân tích dự phòng phát hiện nhiều dấu hiệu rủi ro trong tin nhắn này, đặc biệt là yêu cầu hành động gấp, giả danh hoặc dẫn tới kênh không chính thức."
       : risk === "medium"
@@ -610,23 +646,22 @@ export default function App() {
     };
 
     const risk = riskMap[data.risk] ?? "medium";
-
-    return {
-      risk,
-      label: data.risk ?? "Nghi ngờ",
-      highlights: Array.isArray(data.indicators)
-        ? data.indicators
-            .map((item: { quote?: string }) => item.quote)
-            .filter((quote): quote is string => Boolean(quote))
-        : [],
-      indicators: Array.isArray(data.indicators)
-        ? data.indicators
+    const aiIndicators = Array.isArray(data.indicators)
+      ? mergeRelatedIndicators(
+          data.indicators
             .filter((item: { quote?: string; reason?: string }) => Boolean(item.quote))
             .map((item: { quote?: string; reason?: string }) => ({
               quote: item.quote ?? "",
               reason: item.reason ?? "",
-            }))
-        : [],
+            })),
+        )
+      : [];
+
+    return {
+      risk,
+      label: data.risk ?? "Nghi ngờ",
+      highlights: getIndicatorQuotes(aiIndicators),
+      indicators: aiIndicators,
       detective: typeof data.detective === "string" && data.detective.trim()
         ? data.detective.trim()
         : getFallbackDetective(risk),
@@ -895,7 +930,7 @@ export default function App() {
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu nghi ngờ</p>
                         <div className="space-y-2">
-                          {(analysis.indicators?.length
+                          {mergeRelatedIndicators(analysis.indicators?.length
                             ? analysis.indicators
                             : analysis.highlights.map((quote) => ({ quote, reason: "" }))
                           ).map((indicator, i) => (
@@ -1134,7 +1169,7 @@ export default function App() {
                       <div className="space-y-2">
                         <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu nghi ngờ</p>
                         <div className="space-y-2">
-                          {(item.indicators?.length
+                          {mergeRelatedIndicators(item.indicators?.length
                             ? item.indicators
                             : item.highlights.map((quote) => ({ quote, reason: "" }))
                           ).map((indicator, i) => (
@@ -1197,6 +1232,10 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
 
 
 
