@@ -213,7 +213,20 @@ async function analyzeHandler(req: any, res: any) {
     return res.status(400).json({ error: "Missing message" });
   }
 
-  const urlReport = formatUrlReport(await analyzeUrls(message));
+  const analyzedUrls = await analyzeUrls(message);
+  console.log(JSON.stringify(analyzedUrls, null, 2));
+  const urlReport = formatUrlReport(analyzedUrls);
+  
+  let expandedMessage = message;
+  
+  for (const item of analyzedUrls) {
+    if (item.resolved) {
+      expandedMessage = expandedMessage.replace(
+        item.original,
+        item.expanded
+      );
+    }
+  }
 
   const prompt = `
 Bạn là ScamCheck, công cụ giáo dục và chống lừa đảo online cho người lớn tuổi Việt Nam.
@@ -328,17 +341,3 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
