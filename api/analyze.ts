@@ -239,9 +239,9 @@ async function analyzeHandler(req: any, res: any) {
     return res.status(400).json({ error: "Missing message" });
   }
 
-  const urlReport = formatUrlReport(await analyzeUrls(message));
-
-  const prompt = `
+  const analyzedUrls = await analyzeUrls(message);
+  const urlReport = formatUrlReport(analyzedUrls);
+const prompt = `
 Bạn là ScamCheck, công cụ giáo dục và chống lừa đảo online cho người lớn tuổi Việt Nam.
 
 Hãy phân tích tin nhắn sau:
@@ -352,20 +352,5 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
