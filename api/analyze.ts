@@ -132,6 +132,11 @@ function isBlockedRedirectHost(rawUrl: string) {
   }
 }
 
+const REDIRECT_HEADERS = {
+  "User-Agent": "Mozilla/5.0 ScamCheck/1.0",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
+
 async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3000);
@@ -141,10 +146,7 @@ async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
       method,
       redirect: "manual",
       signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 ScamCheck/1.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
+      headers: REDIRECT_HEADERS,
     });
 
     return response.headers.get("location");
@@ -155,8 +157,29 @@ async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
   }
 }
 
+async function followRedirectUrl(url: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: REDIRECT_HEADERS,
+    });
+
+    return response.url || url;
+  } catch {
+    return url;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function unshortenUrl(rawUrl: string): Promise<string> {
-  let currentUrl = normalizeUrlForFetch(rawUrl);
+  const firstUrl = normalizeUrlForFetch(rawUrl);
+  let currentUrl = firstUrl;
 
   for (let i = 0; i < 5; i += 1) {
     if (isBlockedRedirectHost(currentUrl)) return rawUrl;
@@ -164,7 +187,10 @@ async function unshortenUrl(rawUrl: string): Promise<string> {
     const location = await fetchRedirectLocation(currentUrl, "HEAD")
       || await fetchRedirectLocation(currentUrl, "GET");
 
-    if (!location) return currentUrl;
+    if (!location) {
+      const followedUrl = await followRedirectUrl(firstUrl);
+      return isBlockedRedirectHost(followedUrl) ? rawUrl : followedUrl;
+    }
 
     currentUrl = new URL(location, currentUrl).toString();
   }
@@ -233,9 +259,7 @@ Yêu cầu bắt buộc:
 - Nếu tin nhắn chỉ thông báo ưu đãi và hướng người dùng xem trong app chính thức/website chính thức đã biết, không có link lạ, số điện thoại cá nhân, Zalo/Telegram, OTP, mật khẩu, CCCD, phí trước, hoặc chuyển tiền ngoài kênh chính thức, hãy ưu tiên "An toàn".
 - Nếu nội dung là cảnh báo/phòng tránh lừa đảo, có các cụm như "cảnh báo", "khuyến cáo", "chiêu trò", "tuyệt đối không", "không làm theo", và không yêu cầu người đọc bấm link, gọi số lạ, cung cấp thông tin, đăng nhập hoặc chuyển tiền, hãy đánh giá "An toàn". Đây là nội dung giáo dục, không phải tin lừa đảo.
 - Đánh giá "Nghi ngờ" hoặc "Nguy hiểm" khi có bằng chứng rõ như link/domain lạ, link rút gọn (bit.ly, tinyurl, t.co, goo.gl, is.gd, cutt.ly, rebrand.ly,...), yêu cầu đăng nhập ngoài app chính thức, gửi OTP/mật khẩu/CCCD, chuyển tiền/đóng phí, liên hệ số cá nhân/Zalo/Telegram, đe dọa khóa tài khoản, hoặc tạo áp lực bất thường. Khi phần "Các đường dẫn" có dạng "link rút gọn -> link sau khi mở rộng", hãy phân tích domain sau khi mở rộng và nhắc rõ domain đó trong detective/reason nếu liên quan. Nếu mở rộng ra Google Drive/Docs/Forms, không tự động coi là an toàn: hãy đánh giá theo ngữ cảnh, vì file/form chia sẻ vẫn có thể dùng để phát tán mã độc, thu thông tin hoặc dụ đăng nhập. Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu che giấu đích đến; nếu đi kèm nhận thưởng, xác minh tài khoản, đăng nhập, chuyển tiền hoặc thời hạn gấp thì ít nhất phải là "Nghi ngờ".
-- Ví dụ an toàn: "Viettel thong bao: Tai khoan cua ban duoc tang 50% gia tri the nap khi nap tien qua ung dung MyViettel duy nhat trong ngay hom nay. Chi tiet xem tai app MyViettel." => risk "An toàn", indicators [].
-- Ví dụ an toàn: "[BO CONG AN] CANH BAO: Hien nay co chieu tro gia mao cong an goi dien thong bao phat nguoi hoac doa bat giam lien quan den rua tien nham yeu cau nguoi dan chuyen tien vao tai khoan ca nhan de chiem doat. Tuyet doi khong lam theo!" => risk "An toàn", indicators [].
-- Ví dụ nguy hiểm: "Viettel tang 50%, truy cap http://myviettel-khuyenmai.cc de dang nhap nhan thuong" => risk "Nguy hiểm".
+- Ưu tiên nguyên tắc tổng quát thay vì khớp ví dụ: tin nhắn an toàn thường chỉ thông báo/hướng dẫn qua kênh chính thức và không yêu cầu hành động rủi ro; tin nhắn nguy hiểm thường yêu cầu bấm link lạ, đăng nhập, cung cấp thông tin nhạy cảm, chuyển tiền, liên hệ kênh cá nhân hoặc hành động gấp.
 - detective là lời của nhân vật "Thám tử phân tích": 1 đoạn tối đa 80 chữ, đi thẳng vào bằng chứng chính.
 - indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu risk là "An toàn", indicators là mảng rỗng.
 - actions là tối đa 4 việc nên làm, mỗi việc tối đa 40 chữ, cụ thể và an toàn. Chỉ đưa actions khi có rủi ro lừa đảo hoặc có bước an toàn thật sự quan trọng. Nếu risk là "An toàn" và không có việc phòng tránh lừa đảo cần làm, actions phải là mảng rỗng []. Không đưa lời khuyên đời sống không liên quan đến lừa đảo.
@@ -328,6 +352,9 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
+
+
+
 
 
 

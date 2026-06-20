@@ -70,6 +70,11 @@ function isBlockedRedirectHost(rawUrl: string) {
   }
 }
 
+const REDIRECT_HEADERS = {
+  "User-Agent": "Mozilla/5.0 ScamCheck/1.0",
+  "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+};
+
 async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3000);
@@ -79,10 +84,7 @@ async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
       method,
       redirect: "manual",
       signal: controller.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 ScamCheck/1.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
+      headers: REDIRECT_HEADERS,
     });
 
     return response.headers.get("location");
@@ -93,8 +95,29 @@ async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
   }
 }
 
+async function followRedirectUrl(url: string) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: REDIRECT_HEADERS,
+    });
+
+    return response.url || url;
+  } catch {
+    return url;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function unshortenUrl(rawUrl: string): Promise<string> {
-  let currentUrl = normalizeUrlForFetch(rawUrl);
+  const firstUrl = normalizeUrlForFetch(rawUrl);
+  let currentUrl = firstUrl;
 
   for (let i = 0; i < 5; i += 1) {
     if (isBlockedRedirectHost(currentUrl)) return rawUrl;
@@ -102,13 +125,16 @@ async function unshortenUrl(rawUrl: string): Promise<string> {
     const location = await fetchRedirectLocation(currentUrl, "HEAD")
       || await fetchRedirectLocation(currentUrl, "GET");
 
-    if (!location) return currentUrl;
+    if (!location) {
+      const followedUrl = await followRedirectUrl(firstUrl);
+      return isBlockedRedirectHost(followedUrl) ? rawUrl : followedUrl;
+    }
+
     currentUrl = new URL(location, currentUrl).toString();
   }
 
   return currentUrl;
 }
-
 async function analyzeUrls(message: string): Promise<UrlAnalysis[]> {
   const urls = extractUrlsFromText(message).slice(0, 6);
 
@@ -141,3 +167,4 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ urls: [] });
   }
 }
+
