@@ -13,6 +13,13 @@
   "tiny.cc",
   "rb.gy",
   "lnkd.in",
+  "urlvn.net",
+  "cpmlink.net",
+  "shrtslug.biz",
+  "link-center.net",
+  "direct-link.net",
+  "link-to.net",
+  "linkvertise.com",
 ]);
 
 type UrlAnalysis = {
@@ -167,4 +174,6 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ urls: [] });
   }
 }
+
+
 

@@ -161,6 +161,13 @@ const URL_SHORTENER_DOMAINS = new Set([
   "tiny.cc",
   "rb.gy",
   "lnkd.in",
+  "urlvn.net",
+  "cpmlink.net",
+  "shrtslug.biz",
+  "link-center.net",
+  "direct-link.net",
+  "link-to.net",
+  "linkvertise.com",
 ]);
 
 function getUrlHostname(rawUrl: string) {
@@ -1232,6 +1239,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 
