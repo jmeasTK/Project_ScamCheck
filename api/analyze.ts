@@ -88,6 +88,7 @@ type UrlAnalysis = {
   expanded: string;
   isShortened: boolean;
   resolved: boolean;
+  invalidTarget?: boolean;
 };
 
 function getUrlHostname(rawUrl: string) {
@@ -164,6 +165,79 @@ async function fetchRedirectLocation(url: string, method: "HEAD" | "GET") {
   }
 }
 
+function decodeHtmlAttribute(value: string) {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\\\//g, "/");
+}
+
+function tryDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+
+function looksLikeTemplateUrl(value: string) {
+  const decoded = tryDecodeURIComponent(decodeHtmlAttribute(value)).toLowerCase();
+  return /[{}]/.test(decoded)
+    || /%7b|%7d/i.test(value)
+    || /\b(docid|resourcekeyparam|resourcekey|authuser|template|placeholder)\b/.test(decoded)
+    || /\$\{|<%|%>/.test(decoded);
+}
+
+function normalizeCandidateUrl(value: string, baseUrl: string) {
+  const cleaned = tryDecodeURIComponent(decodeHtmlAttribute(value.trim()))
+    .replace(/^url=/i, "")
+    .replace(/^['\"]|['\"]$/g, "");
+
+  if (looksLikeTemplateUrl(cleaned)) return "";
+
+  try {
+    const candidate = new URL(cleaned, baseUrl).toString();
+    return looksLikeTemplateUrl(candidate) ? "" : candidate;
+  } catch {
+    return "";
+  }
+}
+
+function scoreExpandedCandidate(candidate: string, sourceHost: string) {
+  const hostname = getUrlHostname(candidate);
+  if (!hostname || hostname === sourceHost || looksLikeTemplateUrl(candidate) || isBlockedRedirectHost(candidate) || isShortenedUrl(candidate)) return -100;
+  return 10;
+}
+
+function findExpandedUrlInHtml(html: string, baseUrl: string) {
+  const sourceHost = getUrlHostname(baseUrl);
+  const decodedHtml = decodeHtmlAttribute(html);
+  const candidates = new Set<string>();
+
+  const valuePatterns = [
+    /<meta[^>]+http-equiv=["']?refresh["']?[^>]+content=["'][^"']*url=([^"']+)["']/gi,
+    /(?:window\.)?location(?:\.href|\.replace|\.assign)?\s*(?:=|\()\s*["']([^"']+)["']/gi,
+    /(?:data-url|data-href|data-link|data-target|data-destination|data-redirect|redirect(?:_url)?|go(?:_url)?)\s*[:=]\s*["']([^"']+)["']/gi,
+  ];
+
+  for (const pattern of valuePatterns) {
+    for (const match of decodedHtml.matchAll(pattern)) {
+      if (match[1]) candidates.add(match[1]);
+    }
+  }
+
+
+  return Array.from(candidates)
+    .map((candidate) => normalizeCandidateUrl(candidate, baseUrl))
+    .filter(Boolean)
+    .map((candidate) => ({ candidate, score: scoreExpandedCandidate(candidate, sourceHost) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)[0]?.candidate || null;
+}
 async function followRedirectUrl(url: string) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
@@ -176,7 +250,11 @@ async function followRedirectUrl(url: string) {
       headers: REDIRECT_HEADERS,
     });
 
-    return response.url || url;
+    const finalUrl = response.url || url;
+    if (finalUrl !== url) return finalUrl;
+
+    const html = await response.text().catch(() => "");
+    return html ? findExpandedUrlInHtml(html, finalUrl) || finalUrl : finalUrl;
   } catch {
     return url;
   } finally {
@@ -195,7 +273,7 @@ async function unshortenUrl(rawUrl: string): Promise<string> {
       || await fetchRedirectLocation(currentUrl, "GET");
 
     if (!location) {
-      const followedUrl = await followRedirectUrl(firstUrl);
+      const followedUrl = await followRedirectUrl(currentUrl);
       return isBlockedRedirectHost(followedUrl) ? rawUrl : followedUrl;
     }
 
@@ -204,19 +282,20 @@ async function unshortenUrl(rawUrl: string): Promise<string> {
 
   return currentUrl;
 }
-
 async function analyzeUrls(message: string): Promise<UrlAnalysis[]> {
   const urls = extractUrlsFromText(message).slice(0, 6);
 
   return Promise.all(urls.map(async (url) => {
     const isShortened = isShortenedUrl(url);
     const expanded = isShortened ? await unshortenUrl(url) : url;
+    const invalidTarget = isShortened && looksLikeTemplateUrl(expanded);
 
     return {
       original: url,
-      expanded,
+      expanded: invalidTarget ? url : expanded,
       isShortened,
-      resolved: isShortened && expanded !== url,
+      resolved: isShortened && !invalidTarget && expanded !== url,
+      invalidTarget,
     };
   }));
 }
@@ -226,6 +305,7 @@ function formatUrlReport(urls: UrlAnalysis[]) {
 
   return urls.map((item) => {
     if (!item.isShortened) return `- ${item.original}`;
+    if (item.invalidTarget) return `- ${item.original} -> mở ra trang/tệp không hợp lệ hoặc URL mẫu, không có đích rõ ràng`;
     if (!item.resolved) return `- ${item.original} -> không mở rộng được trong thời gian cho phép`;
     return `- ${item.original} -> ${item.expanded}`;
   }).join("\n");
@@ -248,7 +328,7 @@ async function analyzeHandler(req: any, res: any) {
 
   const analyzedUrls = await analyzeUrls(message);
   const urlReport = formatUrlReport(analyzedUrls);
-const prompt = `
+  const prompt = `
 Bạn là ScamCheck, công cụ giáo dục và chống lừa đảo online cho người lớn tuổi Việt Nam.
 
 Hãy phân tích tin nhắn sau:
@@ -359,7 +439,5 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
-
-
 
 
