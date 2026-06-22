@@ -292,7 +292,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   }
 
   const risk: Exclude<Risk, null> = score >= 55 ? "high" : score >= 25 ? "medium" : "low";
-  const label = risk === "high" ? "Nguy hiểm" : risk === "medium" ? "Nghi ngờ" : "An toàn";
+  const label = risk === "high" ? "Lừa đảo" : risk === "medium" ? "Nghi ngờ" : "An toàn";
   const mergedIndicators = mergeRelatedIndicators(indicators);
   const highlights = getIndicatorQuotes(mergedIndicators);
 
@@ -314,7 +314,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
     },
   };
 }
-function highlightText(text: string, highlights: string[]) {
+function highlightText(text: string, highlights: string[], risk?: Risk) {
   if (!highlights.length) return <span>{text}</span>;
 
   const escaped = highlights.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -326,7 +326,7 @@ function highlightText(text: string, highlights: string[]) {
       {parts.map((part, i) => {
         const isMatch = highlights.some((h) => h.toLowerCase() === part.toLowerCase());
         return isMatch ? (
-          <mark key={i} className="bg-yellow-200 dark:bg-yellow-700/50 text-yellow-900 dark:text-yellow-200 rounded px-0.5">
+          <mark key={i} className={`${risk === "high" ? "bg-red-200 dark:bg-red-900/60 text-red-900 dark:text-red-200" : "bg-yellow-200 dark:bg-yellow-700/50 text-yellow-900 dark:text-yellow-200"} rounded px-0.5`}>
             {part}
           </mark>
         ) : (
@@ -653,6 +653,7 @@ export default function App() {
 
 
     const riskMap: Record<string, Risk> = {
+      "Lừa đảo": "high",
       "Nguy hiểm": "high",
       "Nghi ngờ": "medium",
       "An toàn": "low",
@@ -926,7 +927,7 @@ export default function App() {
                   <div className="bg-white dark:bg-gray-800 px-5 py-4 space-y-2">
                     <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Nội dung tin nhắn gốc:</p>
                     <p className="text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-                      {highlightText(input, analysis.highlights)}
+                      {highlightText(input, analysis.highlights, analysis.risk)}
                     </p>
                   </div>
                 </div>
@@ -947,8 +948,8 @@ export default function App() {
                             ? analysis.indicators
                             : analysis.highlights.map((quote) => ({ quote, reason: "" }))
                           ).map((indicator, i) => (
-                            <div key={i} className="rounded-lg border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-2 space-y-1">
-                              <p className="text-xs text-yellow-800 dark:text-yellow-300 font-mono">{indicator.quote}</p>
+                            <div key={i} className={`rounded-lg border ${analysis.risk === "high" ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30" : "border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20"} px-3 py-2 space-y-1`}>
+                              <p className={`text-xs ${analysis.risk === "high" ? "text-red-800 dark:text-red-300" : "text-yellow-800 dark:text-yellow-300"} font-mono`}>{indicator.quote}</p>
                               {indicator.reason && (
                                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{indicator.reason}</p>
                               )}
@@ -1166,7 +1167,7 @@ export default function App() {
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nội dung tin nhắn gốc</p>
                   <div className="bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-3 text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
-                    {highlightText(item.text, item.highlights)}
+                    {highlightText(item.text, item.highlights, item.risk)}
                   </div>
                 </div>
 
@@ -1186,8 +1187,8 @@ export default function App() {
                             ? item.indicators
                             : item.highlights.map((quote) => ({ quote, reason: "" }))
                           ).map((indicator, i) => (
-                            <div key={i} className="rounded-lg border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-3 py-2 space-y-1">
-                              <p className="text-xs text-yellow-800 dark:text-yellow-300 font-mono">{indicator.quote}</p>
+                            <div key={i} className={`rounded-lg border ${item.risk === "high" ? "border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30" : "border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20"} px-3 py-2 space-y-1`}>
+                              <p className={`text-xs ${item.risk === "high" ? "text-red-800 dark:text-red-300" : "text-yellow-800 dark:text-yellow-300"} font-mono`}>{indicator.quote}</p>
                               {indicator.reason && (
                                 <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{indicator.reason}</p>
                               )}

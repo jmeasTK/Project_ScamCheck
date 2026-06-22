@@ -33,8 +33,9 @@ function extractJsonObject(text: string) {
 }
 
 function normalizeAnalysis(data: GeminiAnalysis) {
-  const allowedRisks = new Set(["An toàn", "Nghi ngờ", "Nguy hiểm"]);
-  const risk = allowedRisks.has(String(data.risk)) ? String(data.risk) : "Nghi ngờ";
+  const allowedRisks = new Set(["An toàn", "Nghi ngờ", "Lừa đảo", "Nguy hiểm"]);
+  const rawRisk = String(data.risk);
+  const risk = rawRisk === "Nguy hiểm" ? "Lừa đảo" : allowedRisks.has(rawRisk) ? rawRisk : "Nghi ngờ";
 
   return {
     risk,
@@ -338,27 +339,25 @@ Các đường dẫn được ScamCheck tách từ tin nhắn:
 ${urlReport}
 
 Yêu cầu bắt buộc:
-- Xưng hô bằng "bạn", "tôi"
+- Xưng hô bằng "bạn", "tôi".
 - Trả lời bằng tiếng Việt rõ ràng, dễ hiểu cho người từ 40 tuổi trở lên.
-- Không bịa thông tin ngoài nội dung tin nhắn.
-- risk chỉ được là một trong ba giá trị: "An toàn", "Nghi ngờ", "Nguy hiểm".
-- Không đánh giá "Nghi ngờ" chỉ vì tin nhắn có khuyến mãi, tài khoản, nạp tiền, ưu đãi, hoặc thời hạn "hôm nay".
-- Nếu tin nhắn chỉ thông báo ưu đãi và hướng người dùng xem trong app chính thức/website chính thức đã biết, không có link lạ, số điện thoại cá nhân, Zalo/Telegram, OTP, mật khẩu, CCCD, phí trước, hoặc chuyển tiền ngoài kênh chính thức, hãy ưu tiên "An toàn".
-- Nếu nội dung là cảnh báo/phòng tránh lừa đảo, có các cụm như "cảnh báo", "khuyến cáo", "chiêu trò", "tuyệt đối không", "không làm theo", và không yêu cầu người đọc bấm link, gọi số lạ, cung cấp thông tin, đăng nhập hoặc chuyển tiền, hãy đánh giá "An toàn". Đây là nội dung giáo dục, không phải tin lừa đảo.
-- Đánh giá "Nghi ngờ" hoặc "Nguy hiểm" khi có bằng chứng rõ như link/domain lạ, link rút gọn (bit.ly, tinyurl, t.co, goo.gl, is.gd, cutt.ly, rebrand.ly, urlvn.net, linkvertise, shrtslug.biz, cpmlink.net,...), yêu cầu đăng nhập ngoài app chính thức, gửi OTP/mật khẩu/CCCD, chuyển tiền/đóng phí, liên hệ số cá nhân/Zalo/Telegram, đe dọa khóa tài khoản, hoặc tạo áp lực bất thường.
-- Khi phần "Các đường dẫn" có dạng "link rút gọn (link sau khi mở rộng)", phải phân tích domain sau khi mở rộng làm bằng chứng chính. Không được viết như thể chưa biết link dẫn tới đâu. Detective và reason phải nhắc domain sau khi mở rộng, ví dụ youtube.com, drive.google.com, docs.google.com.
-- Nếu link rút gọn mở rộng tới nền tảng quen thuộc như youtube.com/youtu.be/drive.google.com/docs.google.com và tin nhắn không yêu cầu đăng nhập, cung cấp thông tin, tải file lạ, chuyển tiền hoặc hành động gấp, không được nói chung chung rằng link "có thể dẫn đến trang lừa đảo hoặc mã độc". Hãy nói rủi ro chính là việc dùng link rút gọn làm giảm minh bạch, còn domain đích là nền tảng quen thuộc.
-- Nếu mở rộng ra Google Drive/Docs/Forms, không tự động coi là an toàn: hãy đánh giá theo ngữ cảnh, vì file/form chia sẻ vẫn có thể dùng để phát tán mã độc, thu thông tin hoặc dụ đăng nhập. Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu che giấu đích đến; nếu đi kèm nhận thưởng, xác minh tài khoản, đăng nhập, chuyển tiền hoặc thời hạn gấp thì ít nhất phải là "Nghi ngờ".
-- Ưu tiên nguyên tắc tổng quát thay vì khớp ví dụ: tin nhắn an toàn thường chỉ thông báo/hướng dẫn qua kênh chính thức và không yêu cầu hành động rủi ro; tin nhắn nguy hiểm thường yêu cầu bấm link lạ, đăng nhập, cung cấp thông tin nhạy cảm, chuyển tiền, liên hệ kênh cá nhân hoặc hành động gấp.
-- detective là lời của nhân vật "Thám tử phân tích": 1 đoạn tối đa 80 chữ, đi thẳng vào bằng chứng chính.
-- indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu có link rút gọn đã được mở rộng trong phần "Các đường dẫn", quote phải gộp thành đúng dạng "link rút gọn (link sau khi mở rộng)" trong một indicator duy nhất, không tách thành hai indicator. Không truy cập hay suy đoán nội dung bên trong Google Drive/Docs/Forms; chỉ phân tích URL/domain và ngữ cảnh tin nhắn. Nếu risk là "An toàn", indicators là mảng rỗng.
+- Không bịa thông tin ngoài nội dung tin nhắn và danh sách đường dẫn ScamCheck đã tách được.
+- risk chỉ được là một trong ba giá trị: "An toàn", "Nghi ngờ", "Lừa đảo".
+- Không dùng ví dụ, không khớp máy móc theo từ khóa riêng lẻ. Hãy đánh giá theo mục đích của tin nhắn, hành động nó yêu cầu người nhận làm, kênh thực hiện, mức độ khẩn cấp, danh tính người gửi, đường dẫn/domain và loại thông tin/tài sản có nguy cơ bị mất.
+- Chọn "An toàn" khi nội dung chủ yếu là thông báo, nhắc lịch, cảnh báo/phòng tránh, hoặc hướng dẫn qua kênh chính thức; không yêu cầu bấm link lạ, đăng nhập ngoài kênh chính thức, cung cấp thông tin nhạy cảm, chuyển tiền, nộp phí, liên hệ kênh cá nhân, hoặc hành động gấp có rủi ro.
+- Chọn "Nghi ngờ" khi có dấu hiệu cần xác minh nhưng chưa đủ kết luận lừa đảo: link rút gọn/đường dẫn không minh bạch, người gửi không rõ, lời mời/ưu đãi thiếu nguồn, file/form chia sẻ chưa xác minh được, yêu cầu bấm link nhưng chưa yêu cầu thông tin nhạy cảm hoặc tiền, hoặc ngữ cảnh còn thiếu.
+- Chọn "Lừa đảo" khi có bằng chứng rõ về ý đồ chiếm đoạt hoặc đánh cắp thông tin: yêu cầu OTP/mật khẩu/PIN/CCCD/tài khoản ngân hàng, đăng nhập qua link đáng ngờ, chuyển tiền/nộp phí/đặt cọc, đe dọa khóa tài khoản/phạt/bắt giữ, giả danh cơ quan/ngân hàng/người quen để tạo áp lực, nhận thưởng kèm phí hoặc thông tin cá nhân, hướng sang Zalo/Telegram/số cá nhân, yêu cầu giữ bí mật, hoặc domain giả mạo thương hiệu.
+- Nếu phần "Các đường dẫn" có dạng "link rút gọn (link sau khi mở rộng)", phải phân tích domain sau khi mở rộng làm bằng chứng chính. Không được viết như thể chưa biết link dẫn tới đâu.
+- Link rút gọn là dấu hiệu giảm minh bạch, không tự động là "Lừa đảo". Nếu link mở rộng tới nền tảng quen thuộc như youtube.com, drive.google.com, docs.google.com, hãy nói đúng domain đích và đánh giá theo ngữ cảnh tin nhắn. Không truy cập hay suy đoán nội dung bên trong Drive/Docs/Forms; chỉ phân tích URL/domain và nội dung tin nhắn.
+- Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu cần xác minh. Chỉ nâng lên "Lừa đảo" khi đi kèm yêu cầu rủi ro như đăng nhập, cung cấp thông tin, tải file lạ, chuyển tiền, nhận thưởng, hoặc áp lực gấp.
+- detective là lời của nhân vật "Thám tử phân tích": 1 đoạn tối đa 80 chữ, đi thẳng vào kết luận và bằng chứng chính.
+- indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu có link rút gọn đã được mở rộng trong phần "Các đường dẫn", quote phải gộp thành đúng dạng "link rút gọn (link sau khi mở rộng)" trong một indicator duy nhất, không tách thành hai indicator. Nếu risk là "An toàn", indicators là mảng rỗng.
 - actions là tối đa 4 việc nên làm, mỗi việc tối đa 40 chữ, cụ thể và an toàn. Chỉ đưa actions khi có rủi ro lừa đảo hoặc có bước an toàn thật sự quan trọng. Nếu risk là "An toàn" và không có việc phòng tránh lừa đảo cần làm, actions phải là mảng rỗng []. Không đưa lời khuyên đời sống không liên quan đến lừa đảo.
 - psychology là lời của nhân vật "Cô tâm lý": nếu có rủi ro, manipulation ngắn gọn và advice có thể dài tối đa 100 chữ, trấn an người dùng, không làm họ xấu hổ. Nếu risk là "An toàn", psychology là null.
 - Chỉ trả về đúng một JSON object hợp lệ bắt đầu bằng { và kết thúc bằng }. Không markdown, không code fence, không giải thích ngoài JSON.
-
 Cấu trúc JSON:
 {
-  "risk": "An toàn | Nghi ngờ | Nguy hiểm",
+  "risk": "An toàn | Nghi ngờ | Lừa đảo",
   "detective": "lời phân tích của Thám tử",
   "indicators": [
     {
