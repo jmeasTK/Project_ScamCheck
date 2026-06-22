@@ -368,7 +368,8 @@ Cấu trúc JSON:
   "actions": [
     "việc nên làm 1",
     "việc nên làm 2",
-    "việc nên làm 3"
+    "việc nên làm 3",
+    "việc nên làm 4 (nếu có))",
   ],
   "psychology": {
     "manipulation": "thủ đoạn tâm lý",
