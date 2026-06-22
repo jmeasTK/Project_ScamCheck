@@ -307,7 +307,7 @@ function formatUrlReport(urls: UrlAnalysis[]) {
     if (!item.isShortened) return `- ${item.original}`;
     if (item.invalidTarget) return `- ${item.original} -> mở ra trang/tệp không hợp lệ hoặc URL mẫu, không có đích rõ ràng`;
     if (!item.resolved) return `- ${item.original} -> không mở rộng được trong thời gian cho phép`;
-    return `- ${item.original} -> ${item.expanded}`;
+    return `- ${item.original} (${item.expanded})`;
   }).join("\n");
 }
 
@@ -345,10 +345,10 @@ Yêu cầu bắt buộc:
 - Không đánh giá "Nghi ngờ" chỉ vì tin nhắn có khuyến mãi, tài khoản, nạp tiền, ưu đãi, hoặc thời hạn "hôm nay".
 - Nếu tin nhắn chỉ thông báo ưu đãi và hướng người dùng xem trong app chính thức/website chính thức đã biết, không có link lạ, số điện thoại cá nhân, Zalo/Telegram, OTP, mật khẩu, CCCD, phí trước, hoặc chuyển tiền ngoài kênh chính thức, hãy ưu tiên "An toàn".
 - Nếu nội dung là cảnh báo/phòng tránh lừa đảo, có các cụm như "cảnh báo", "khuyến cáo", "chiêu trò", "tuyệt đối không", "không làm theo", và không yêu cầu người đọc bấm link, gọi số lạ, cung cấp thông tin, đăng nhập hoặc chuyển tiền, hãy đánh giá "An toàn". Đây là nội dung giáo dục, không phải tin lừa đảo.
-- Đánh giá "Nghi ngờ" hoặc "Nguy hiểm" khi có bằng chứng rõ như link/domain lạ, link rút gọn (bit.ly, tinyurl, t.co, goo.gl, is.gd, cutt.ly, rebrand.ly, urlvn.net, linkvertise, shrtslug.biz, cpmlink.net,...), yêu cầu đăng nhập ngoài app chính thức, gửi OTP/mật khẩu/CCCD, chuyển tiền/đóng phí, liên hệ số cá nhân/Zalo/Telegram, đe dọa khóa tài khoản, hoặc tạo áp lực bất thường. Khi phần "Các đường dẫn" có dạng "link rút gọn -> link sau khi mở rộng", hãy phân tích domain sau khi mở rộng và nhắc rõ domain đó trong detective/reason nếu liên quan. Nếu mở rộng ra Google Drive/Docs/Forms, không tự động coi là an toàn: hãy đánh giá theo ngữ cảnh, vì file/form chia sẻ vẫn có thể dùng để phát tán mã độc, thu thông tin hoặc dụ đăng nhập. Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu che giấu đích đến; nếu đi kèm nhận thưởng, xác minh tài khoản, đăng nhập, chuyển tiền hoặc thời hạn gấp thì ít nhất phải là "Nghi ngờ".
+- Đánh giá "Nghi ngờ" hoặc "Nguy hiểm" khi có bằng chứng rõ như link/domain lạ, link rút gọn (bit.ly, tinyurl, t.co, goo.gl, is.gd, cutt.ly, rebrand.ly, urlvn.net, linkvertise, shrtslug.biz, cpmlink.net,...), yêu cầu đăng nhập ngoài app chính thức, gửi OTP/mật khẩu/CCCD, chuyển tiền/đóng phí, liên hệ số cá nhân/Zalo/Telegram, đe dọa khóa tài khoản, hoặc tạo áp lực bất thường. Khi phần "Các đường dẫn" có dạng "link rút gọn (link sau khi mở rộng)", hãy phân tích domain sau khi mở rộng và nhắc rõ domain đó trong detective/reason nếu liên quan. Nếu mở rộng ra Google Drive/Docs/Forms, không tự động coi là an toàn: hãy đánh giá theo ngữ cảnh, vì file/form chia sẻ vẫn có thể dùng để phát tán mã độc, thu thông tin hoặc dụ đăng nhập. Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu che giấu đích đến; nếu đi kèm nhận thưởng, xác minh tài khoản, đăng nhập, chuyển tiền hoặc thời hạn gấp thì ít nhất phải là "Nghi ngờ".
 - Ưu tiên nguyên tắc tổng quát thay vì khớp ví dụ: tin nhắn an toàn thường chỉ thông báo/hướng dẫn qua kênh chính thức và không yêu cầu hành động rủi ro; tin nhắn nguy hiểm thường yêu cầu bấm link lạ, đăng nhập, cung cấp thông tin nhạy cảm, chuyển tiền, liên hệ kênh cá nhân hoặc hành động gấp.
 - detective là lời của nhân vật "Thám tử phân tích": 1 đoạn tối đa 80 chữ, đi thẳng vào bằng chứng chính.
-- indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu risk là "An toàn", indicators là mảng rỗng.
+- indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu có link rút gọn đã được mở rộng trong phần "Các đường dẫn", quote phải gộp thành đúng dạng "link rút gọn (link sau khi mở rộng)" trong một indicator duy nhất, không tách thành hai indicator. Không truy cập hay suy đoán nội dung bên trong Google Drive/Docs/Forms; chỉ phân tích URL/domain và ngữ cảnh tin nhắn. Nếu risk là "An toàn", indicators là mảng rỗng.
 - actions là tối đa 4 việc nên làm, mỗi việc tối đa 40 chữ, cụ thể và an toàn. Chỉ đưa actions khi có rủi ro lừa đảo hoặc có bước an toàn thật sự quan trọng. Nếu risk là "An toàn" và không có việc phòng tránh lừa đảo cần làm, actions phải là mảng rỗng []. Không đưa lời khuyên đời sống không liên quan đến lừa đảo.
 - psychology là lời của nhân vật "Cô tâm lý": nếu có rủi ro, manipulation ngắn gọn và advice có thể dài tối đa 100 chữ, trấn an người dùng, không làm họ xấu hổ. Nếu risk là "An toàn", psychology là null.
 - Chỉ trả về đúng một JSON object hợp lệ bắt đầu bằng { và kết thúc bằng }. Không markdown, không code fence, không giải thích ngoài JSON.
@@ -439,5 +439,7 @@ export default async function handler(req: any, res: any) {
     });
   }
 }
+
+
 
 

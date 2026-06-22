@@ -103,7 +103,11 @@ interface Analysis {
 }
 
 function getIndicatorBaseQuote(quote: string) {
-  return quote.split("->")[0]?.trim().toLowerCase() || quote.trim().toLowerCase();
+  return quote
+    .split("->")[0]
+    ?.replace(/\s+\(https?:\/\/.*\)\s*$/i, "")
+    .trim()
+    .toLowerCase() || quote.trim().toLowerCase();
 }
 
 function mergeRelatedIndicators(indicators: Indicator[]) {
@@ -121,7 +125,9 @@ function mergeRelatedIndicators(indicators: Indicator[]) {
       continue;
     }
 
-    const preferredQuote = quote.includes("->") && !existing.quote.includes("->") ? quote : existing.quote;
+    const quoteHasTarget = quote.includes("->") || /\s+\(https?:\/\//i.test(quote);
+    const existingHasTarget = existing.quote.includes("->") || /\s+\(https?:\/\//i.test(existing.quote);
+    const preferredQuote = quoteHasTarget && !existingHasTarget ? quote : existing.quote;
     const reasons = [existing.reason, indicator.reason.trim()].filter(Boolean);
     const uniqueReasons = Array.from(new Set(reasons));
 
@@ -248,9 +254,9 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
     const suspiciousDomain = /\.(cc|top|xyz|click|info|shop|live|site|online|vip|net)\b/i.test(expandedUrl);
     const typoBank = /vietcorn|vietcombank-login|bidv-?secure|techcombank-?verify|mbbank-?secure/i.test(expandedUrl);
     addIndicator(
-      url,
+      resolvedShortUrl ? `${url} (${expandedUrl})` : url,
       resolvedShortUrl
-        ? `Đường dẫn rút gọn dẫn tới ${expandedHost || expandedUrl}. Dù là dịch vụ quen thuộc như Google Drive, bạn vẫn nên kiểm tra nguồn gửi và nội dung tệp trước khi mở.`
+        ? `Đường dẫn rút gọn dẫn tới ${expandedHost || expandedUrl}. Không cần mở nội dung bên trong; chỉ cần kiểm tra nguồn gửi và xem đường dẫn đích có hợp lý không.`
         : shortenedUrl
           ? "Đường dẫn rút gọn che giấu địa chỉ thật. Với tin nhắn lạ, đây là dấu hiệu cần kiểm chứng trước khi bấm."
           : suspiciousDomain || typoBank
@@ -1239,6 +1245,8 @@ export default function App() {
     </div>
   );
 }
+
+
 
 
 
