@@ -722,8 +722,15 @@ export default function App() {
         ]);
       }
     } catch (error) {
-      const fallbackUrls = await resolveUrlsForFallback(input);
-      const fallbackResult = analyzeText(input, fallbackUrls);
+      let fallbackResult: Analysis;
+
+      try {
+        const fallbackUrls = await resolveUrlsForFallback(input);
+        fallbackResult = analyzeText(input, fallbackUrls);
+      } catch {
+        fallbackResult = analyzeText(input);
+      }
+
       setAnalysis(fallbackResult);
 
       if (fallbackResult.risk) {
@@ -738,7 +745,7 @@ export default function App() {
             detective: fallbackResult.detective,
             actions: fallbackResult.actions,
             psychology: fallbackResult.psychology,
-            usedFallback: fallbackResult.usedFallback,
+            usedFallback: true,
             time: new Date(),
           },
           ...prev.slice(0, 49),
