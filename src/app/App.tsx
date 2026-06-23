@@ -206,12 +206,12 @@ function extractUrlsFromText(text: string) {
 }
 
 function hasProtectiveInstruction(normalized: string) {
-  return /\b(khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|khong dang nhap|khong goi lai|dung bam|dung cung cap|canh giac|phong tranh|tranh bi)\b/i.test(normalized)
-    || /\b(khong|dung)\b.{0,60}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la)\b/i.test(normalized);
+  return /\b(khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|khong dang nhap|khong goi lai|khong tham gia|khong to chuc|khong danh bac|khong ca do|khong tiep tay|dung bam|dung cung cap|canh giac|phong tranh|tranh bi)\b/i.test(normalized)
+    || /\b(khong|dung)\b.{0,60}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la|tham gia|to chuc danh bac|danh bac|ca do|tiep tay)\b/i.test(normalized);
 }
 
 function hasRiskyActionRequest(normalized: string) {
-  const actionableText = normalized.replace(/\b(tuyet doi khong|khong|dung)\b.{0,90}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la)\b/gi, "");
+  const actionableText = normalized.replace(/\b(tuyet doi khong|khong|dung)\b.{0,90}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la|tham gia|to chuc danh bac|danh bac|ca do|tiep tay)\b/gi, "");
   const requestToSensitiveInfo = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|nhap|gui|doc|cung cap|xac minh|dang nhap)\b.{0,80}\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|thong tin ca nhan|tai khoan ngan hang|so tai khoan)\b/i.test(actionableText);
   const requestToMoney = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|chuyen|nap|dong|thanh toan|nop)\b.{0,80}\b(tien|phi|coc|thue|ho so|van chuyen|xac minh|tai khoan ca nhan)\b/i.test(actionableText);
   const requestToUnsafeChannel = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|lien he|goi|nhan tin|ket ban)\b.{0,80}\b(zalo|telegram|whatsapp|so dien thoai|so la|tai khoan ca nhan)\b/i.test(actionableText);
@@ -244,7 +244,7 @@ function hasOnlyLowRiskWarningUrls(text: string) {
 function isPublicSafetyWarning(text: string) {
   const normalized = normalizeVietnamese(text);
   const hasWarningContext = /\b(canh bao|khuyen cao|luu y|chieu tro|thu doan|lua dao|gia mao|chiem doat|mao danh|thu doan moi|dau hieu lua dao|phong tranh)\b/i.test(normalized);
-  const hasPublicSafetySource = /\b(bo cong an|cong an|cuc an toan thong tin|co quan chuc nang|ngan hang nha nuoc|ubnd|chinh phu|bao chi|truyen hinh|nha truong|ban quan ly|tong dai chinh thuc)\b/i.test(normalized);
+  const hasPublicSafetySource = /\b(bo cong an|cong an|cuc an toan thong tin|co quan chuc nang|cuc an ninh mang|pctp su dung cong nghe cao|ngan hang nha nuoc|ubnd|chinh phu|bao chi|truyen hinh|nha truong|ban quan ly|tong dai chinh thuc)\b/i.test(normalized);
   const protective = hasProtectiveInstruction(normalized);
   const riskyRequest = hasRiskyActionRequest(normalized);
   const describedScam = /\b(chieu tro|thu doan|lua dao|gia mao|mao danh|doi tuong|ke xau|chiem doat)\b.{0,140}\b(yeu cau|du do|ep|goi dien|nhan tin|dan du|thong bao|de doa)\b/i.test(normalized);
@@ -257,7 +257,7 @@ function isPublicSafetyWarning(text: string) {
     && !activeRiskyRequest
     && !hasRewardOrThreatToReader
     && (!hasUnsafeLink || protective || hasOnlyLowRiskWarningUrls(text))
-    && (hasPublicSafetySource || /\b(khong lam theo|khong chuyen tien|khong cung cap|canh giac)\b/i.test(normalized));
+    && (hasPublicSafetySource || /\b(khong lam theo|khong chuyen tien|khong cung cap|khong tham gia|khong to chuc|khong danh bac|khong ca do|canh giac)\b/i.test(normalized));
 }
 function isRoutineSafeNotice(text: string) {
   const normalized = normalizeVietnamese(text);
@@ -281,14 +281,15 @@ function isCommunitySafetyNotice(text: string) {
   const urls = extractUrlsFromText(text);
   const hasAuthoritySource = /\b(bo cong an|cong an|cuc canh sat|co quan cong an|co quan chuc nang|ubnd|uy ban nhan dan|nha truong|ban quan ly|to dan pho)\b/i.test(normalized);
   const asksToReport = /\b(phat hien|to giac|bao tin|bao ngay|lien he|goi|hotline|duong day nong)\b.{0,140}\b(co quan cong an|cong an|co quan chuc nang|hotline|duong day nong)\b/i.test(normalized);
-  const publicSafetyTopic = /\b(phong chong|phong, chong|huong ung|thang hanh dong|vi pham phap luat|toi pham|ma tuy|bao luc|xam hai|an ninh trat tu|phong chay|chua chay|dich benh)\b/i.test(normalized);
+  const givesPublicAdvice = /\b(khuyen cao|de nghi|yeu cau|van dong)\b.{0,140}\b(khong tham gia|khong to chuc|khong danh bac|khong ca do|khong tiep tay|canh giac|phong tranh)\b/i.test(normalized);
+  const publicSafetyTopic = /\b(phong chong|phong, chong|huong ung|thang hanh dong|vi pham phap luat|toi pham|ma tuy|bao luc|xam hai|an ninh trat tu|phong chay|chua chay|dich benh|danh bac|ca do|cong nghe cao|an ninh mang)\b/i.test(normalized);
   const hasSuspiciousUrl = urls.some((url) => isShortenedUrl(url) || !isOfficialInfoHost(getUrlHostname(url)));
   const asksSensitiveData = /\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|so tai khoan|tai khoan ngan hang)\b/i.test(normalized);
   const asksMoney = /\b(chuyen tien|nap tien|dong phi|thanh toan phi|phi xac minh|phi ho so|dat coc|nop tien)\b/i.test(normalized);
   const unsafePrivateChannel = /\b(zalo|telegram|whatsapp|tai khoan ca nhan|ket ban|nhan tin rieng)\b/i.test(normalized);
 
   return hasAuthoritySource
-    && asksToReport
+    && (asksToReport || givesPublicAdvice)
     && publicSafetyTopic
     && !hasRiskyActionRequest(normalized)
     && !asksSensitiveData
@@ -1329,7 +1330,7 @@ export default function App() {
 
         {/* Legal notice */}
         <div className="rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 px-5 py-4 text-xs text-blue-800 dark:text-blue-300 leading-relaxed text-center">
-          <span className="font-bold">Lưu ý pháp lý:</span> ScamCheck là công cụ giáo dục do nhóm học viên phát triển và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Khi nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ.
+          <span className="font-bold">Lưu ý pháp lý:</span> ScamCheck là công cụ giáo dục do nhóm học viên phát triển và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
         </div>
       </div>
     </div>
