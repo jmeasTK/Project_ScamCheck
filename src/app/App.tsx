@@ -64,16 +64,69 @@ const SAMPLES = [
 ];
 
 type Risk = "high" | "medium" | "low" | null;
-type AnalyzeErrorCode = "invalid_json" | "ai_error";
+type AnalyzeErrorCode = "invalid_json" | "overloaded" | "quota" | "auth" | "network" | "server" | "ai_error";
 
 class AnalyzeError extends Error {
   code: AnalyzeErrorCode;
+  status?: number;
 
-  constructor(code: AnalyzeErrorCode, message: string) {
+  constructor(code: AnalyzeErrorCode, message: string, status?: number) {
     super(message);
     this.name = "AnalyzeError";
     this.code = code;
+    this.status = status;
   }
+}
+
+function getAnalyzeErrorToast(error: unknown) {
+  if (error instanceof AnalyzeError) {
+    if (error.code === "invalid_json") {
+      return {
+        title: "AI trả kết quả chưa hoàn chỉnh",
+        description: "Gemini phản hồi thiếu định dạng cần thiết, nên ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
+      };
+    }
+
+    if (error.code === "overloaded") {
+      return {
+        title: "Gemini đang quá tải",
+        description: "Model hiện phản hồi chậm hoặc báo quá tải. ScamCheck đã chuyển sang bộ phân tích dự phòng để bạn vẫn có kết quả ngay.",
+      };
+    }
+
+    if (error.code === "quota") {
+      return {
+        title: "Gemini bị giới hạn lượt gọi",
+        description: "API key có thể đã hết quota hoặc bị giới hạn tạm thời. ScamCheck đã dùng bộ phân tích dự phòng.",
+      };
+    }
+
+    if (error.code === "auth") {
+      return {
+        title: "Gemini API key không hợp lệ",
+        description: "Máy chủ không xác thực được API key. Kiểm tra lại biến GEMINI_API_KEY trên Vercel khi có thời gian.",
+      };
+    }
+
+    if (error.code === "network") {
+      return {
+        title: "Không kết nối được tới máy chủ AI",
+        description: "Mạng hoặc máy chủ phản hồi không ổn định. ScamCheck đã dùng bộ phân tích dự phòng thay vì dừng kiểm tra.",
+      };
+    }
+
+    if (error.code === "server") {
+      return {
+        title: "Máy chủ AI gặp lỗi",
+        description: error.status ? `API trả lỗi ${error.status}. ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.` : "ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
+      };
+    }
+  }
+
+  return {
+    title: "Không thể dùng AI lúc này",
+    description: "ScamCheck đã dùng bộ phân tích dự phòng để bạn vẫn có kết quả kiểm tra.",
+  };
 }
 
 type Indicator = {
@@ -716,22 +769,47 @@ export default function App() {
     }
   }
   async function analyzeWithAI(text: string): Promise<Analysis> {
-    const response = await fetch("/api/analyze", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ message: text }),
-    });
+    let response: Response;
+
+    try {
+      response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ message: text }),
+      });
+    } catch {
+      throw new AnalyzeError("network", "Không kết nối được tới máy chủ AI");
+    }
 
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
+      const detail = typeof data?.detail === "string" ? data.detail : "";
+      const errorText = `${data?.error ?? ""} ${detail}`.toLowerCase();
+
       if (data?.error === "Gemini returned invalid JSON") {
-        throw new AnalyzeError("invalid_json", "Gemini chưa trả xong kết quả phân tích");
+        throw new AnalyzeError("invalid_json", "Gemini chưa trả xong kết quả phân tích", response.status);
       }
 
-      throw new AnalyzeError("ai_error", "Không gọi được AI");
+      if (response.status === 401 || errorText.includes("unauthenticated") || errorText.includes("api key") || errorText.includes("authentication")) {
+        throw new AnalyzeError("auth", "Gemini API key không hợp lệ", response.status);
+      }
+
+      if (response.status === 429 || errorText.includes("quota") || errorText.includes("rate limit") || errorText.includes("resource_exhausted")) {
+        throw new AnalyzeError("quota", "Gemini bị giới hạn lượt gọi", response.status);
+      }
+
+      if (response.status === 503 || errorText.includes("overload") || errorText.includes("overloaded") || errorText.includes("unavailable") || errorText.includes("try again later")) {
+        throw new AnalyzeError("overloaded", "Gemini đang quá tải", response.status);
+      }
+
+      if (response.status >= 500) {
+        throw new AnalyzeError("server", "Máy chủ AI gặp lỗi", response.status);
+      }
+
+      throw new AnalyzeError("ai_error", "Không gọi được AI", response.status);
     }
 
 
@@ -805,6 +883,13 @@ export default function App() {
         ]);
       }
     } catch (error) {
+      const errorToast = getAnalyzeErrorToast(error);
+      toast.warning(errorToast.title, {
+        description: errorToast.description,
+        duration: 7000,
+        icon: <WifiOff className="h-4 w-4" />,
+      });
+
       let fallbackResult: Analysis;
 
       try {
