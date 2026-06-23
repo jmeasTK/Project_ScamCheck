@@ -1032,7 +1032,7 @@ export default function App() {
                     <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{detectiveText}</p>
                     {analysis.highlights.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu nghi ngờ</p>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu</p>
                         <div className="space-y-2">
                           {mergeRelatedIndicators(analysis.indicators?.length
                             ? analysis.indicators
