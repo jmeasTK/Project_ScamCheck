@@ -276,19 +276,39 @@ function isRoutineSafeNotice(text: string) {
     && (!urls.length || hasOfficialChannel || urls.every((url) => isOfficialInfoHost(getUrlHostname(url))))
     && !/\b(trung thuong|trung giai|nhan qua|phan thuong|phi xac minh|phi ho so|dong phi|chuyen tien vao tai khoan ca nhan)\b/i.test(normalized);
 }
+function isCommunitySafetyNotice(text: string) {
+  const normalized = normalizeVietnamese(text);
+  const urls = extractUrlsFromText(text);
+  const hasAuthoritySource = /\b(bo cong an|cong an|cuc canh sat|co quan cong an|co quan chuc nang|ubnd|uy ban nhan dan|nha truong|ban quan ly|to dan pho)\b/i.test(normalized);
+  const asksToReport = /\b(phat hien|to giac|bao tin|bao ngay|lien he|goi|hotline|duong day nong)\b.{0,140}\b(co quan cong an|cong an|co quan chuc nang|hotline|duong day nong)\b/i.test(normalized);
+  const publicSafetyTopic = /\b(phong chong|phong, chong|huong ung|thang hanh dong|vi pham phap luat|toi pham|ma tuy|bao luc|xam hai|an ninh trat tu|phong chay|chua chay|dich benh)\b/i.test(normalized);
+  const hasSuspiciousUrl = urls.some((url) => isShortenedUrl(url) || !isOfficialInfoHost(getUrlHostname(url)));
+  const asksSensitiveData = /\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|so tai khoan|tai khoan ngan hang)\b/i.test(normalized);
+  const asksMoney = /\b(chuyen tien|nap tien|dong phi|thanh toan phi|phi xac minh|phi ho so|dat coc|nop tien)\b/i.test(normalized);
+  const unsafePrivateChannel = /\b(zalo|telegram|whatsapp|tai khoan ca nhan|ket ban|nhan tin rieng)\b/i.test(normalized);
+
+  return hasAuthoritySource
+    && asksToReport
+    && publicSafetyTopic
+    && !hasRiskyActionRequest(normalized)
+    && !asksSensitiveData
+    && !asksMoney
+    && !unsafePrivateChannel
+    && (!urls.length || !hasSuspiciousUrl);
+}
 
 function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
   const normalized = normalizeVietnamese(text);
 
-  if (isPublicSafetyWarning(text) || isRoutineSafeNotice(text)) {
+  if (isPublicSafetyWarning(text) || isRoutineSafeNotice(text) || isCommunitySafetyNotice(text)) {
     return {
       risk: "low",
       label: "An toàn",
       highlights: [],
       indicators: [],
-      detective: "Bộ phân tích dự phòng nhận thấy đây là nội dung cảnh báo/phòng tránh lừa đảo, không phải tin nhắn đang dụ bạn cung cấp thông tin hay chuyển tiền.",
+      detective: "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
       actions: [],
       usedFallback: true,
       psychology: null,
