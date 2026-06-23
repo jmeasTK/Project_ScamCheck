@@ -815,7 +815,6 @@ export default function App() {
 
     const riskMap: Record<string, Risk> = {
       "Lừa đảo": "high",
-      "Nguy hiểm": "high",
       "Nghi ngờ": "medium",
       "An toàn": "low",
     };
