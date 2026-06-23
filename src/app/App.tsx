@@ -205,14 +205,76 @@ function extractUrlsFromText(text: string) {
     });
 }
 
+function hasProtectiveInstruction(normalized: string) {
+  return /\b(khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|khong dang nhap|khong goi lai|dung bam|dung cung cap|canh giac|phong tranh|tranh bi)\b/i.test(normalized)
+    || /\b(khong|dung)\b.{0,60}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la)\b/i.test(normalized);
+}
+
+function hasRiskyActionRequest(normalized: string) {
+  const actionableText = normalized.replace(/\b(tuyet doi khong|khong|dung)\b.{0,90}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la)\b/gi, "");
+  const requestToSensitiveInfo = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|nhap|gui|doc|cung cap|xac minh|dang nhap)\b.{0,80}\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|thong tin ca nhan|tai khoan ngan hang|so tai khoan)\b/i.test(actionableText);
+  const requestToMoney = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|chuyen|nap|dong|thanh toan|nop)\b.{0,80}\b(tien|phi|coc|thue|ho so|van chuyen|xac minh|tai khoan ca nhan)\b/i.test(actionableText);
+  const requestToUnsafeChannel = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|lien he|goi|nhan tin|ket ban)\b.{0,80}\b(zalo|telegram|whatsapp|so dien thoai|so la|tai khoan ca nhan)\b/i.test(actionableText);
+  const requestToUnsafeLink = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|bam|nhan vao|truy cap|mo link|vao link|dang nhap|xac minh)\b.{0,80}\b(link|duong dan|website|trang web|tai khoan|nhan thuong|mo khoa|bao mat)\b/i.test(actionableText);
+
+  return requestToSensitiveInfo || requestToMoney || requestToUnsafeChannel || requestToUnsafeLink;
+}
+
+function isOfficialInfoHost(hostname: string) {
+  return hostname.endsWith(".gov.vn")
+    || hostname.endsWith(".edu.vn")
+    || hostname === "chinhphu.vn"
+    || hostname === "bocongan.gov.vn"
+    || hostname === "mic.gov.vn"
+    || hostname === "khonggianmang.vn"
+    || hostname === "vtv.vn"
+    || hostname === "vneconomy.vn";
+}
+
+function hasOnlyLowRiskWarningUrls(text: string) {
+  const urls = extractUrlsFromText(text);
+  if (!urls.length) return true;
+
+  return urls.every((url) => {
+    const hostname = getUrlHostname(url);
+    return Boolean(hostname) && !isShortenedUrl(url) && isOfficialInfoHost(hostname);
+  });
+}
+
 function isPublicSafetyWarning(text: string) {
   const normalized = normalizeVietnamese(text);
-  const hasWarningContext = /\b(canh bao|khuyen cao|luu y|chieu tro|thu doan|lua dao|gia mao|chiem doat|tuyet doi khong|khong lam theo)\b/i.test(normalized);
-  const hasProtectiveInstruction = /\b(tuyet doi khong|khong lam theo|khong chuyen tien|khong cung cap|canh giac|phong tranh|tranh bi)\b/i.test(normalized);
-  const hasDirectTrap = /https?:\/\/|www\.|\b(truy cap|bam vao|nhan vao|dang nhap|xac minh tai|lien he ngay|goi ngay so|zalo|telegram|gui otp|doc ma otp)\b/i.test(normalized);
-  const hasPhoneNumber = /\b(0\d{9,10}|\+84\d{9,10})\b/.test(normalized);
+  const hasWarningContext = /\b(canh bao|khuyen cao|luu y|chieu tro|thu doan|lua dao|gia mao|chiem doat|mao danh|thu doan moi|dau hieu lua dao|phong tranh)\b/i.test(normalized);
+  const hasPublicSafetySource = /\b(bo cong an|cong an|cuc an toan thong tin|co quan chuc nang|ngan hang nha nuoc|ubnd|chinh phu|bao chi|truyen hinh|nha truong|ban quan ly|tong dai chinh thuc)\b/i.test(normalized);
+  const protective = hasProtectiveInstruction(normalized);
+  const riskyRequest = hasRiskyActionRequest(normalized);
+  const describedScam = /\b(chieu tro|thu doan|lua dao|gia mao|mao danh|doi tuong|ke xau|chiem doat)\b.{0,140}\b(yeu cau|du do|ep|goi dien|nhan tin|dan du|thong bao|de doa)\b/i.test(normalized);
+  const activeRiskyRequest = riskyRequest && !describedScam;
+  const hasUnsafeLink = extractUrlsFromText(text).some((url) => isShortenedUrl(url) || !isOfficialInfoHost(getUrlHostname(url)));
+  const hasRewardOrThreatToReader = /\b(tai khoan cua ban|ban da trung|ban nhan duoc|ban dang bi|se khoa tai khoan cua ban|neu ban khong|hoan tat ngay|xac minh ngay)\b/i.test(normalized);
 
-  return hasWarningContext && hasProtectiveInstruction && !hasDirectTrap && !hasPhoneNumber;
+  return hasWarningContext
+    && protective
+    && !activeRiskyRequest
+    && !hasRewardOrThreatToReader
+    && (!hasUnsafeLink || protective || hasOnlyLowRiskWarningUrls(text))
+    && (hasPublicSafetySource || /\b(khong lam theo|khong chuyen tien|khong cung cap|canh giac)\b/i.test(normalized));
+}
+function isRoutineSafeNotice(text: string) {
+  const normalized = normalizeVietnamese(text);
+  const urls = extractUrlsFromText(text);
+  const hasRoutineContext = /\b(thong bao|lich|nhac lich|bao tri|cap nhat|tam ngung|phun thuoc|ve sinh|khuyen mai|uu dai|giam gia|chuong trinh|chi tiet xem tai app|xem tai ung dung)\b/i.test(normalized);
+  const hasOfficialChannel = /\b(app chinh thuc|ung dung chinh thuc|website chinh thuc|tong dai chinh thuc|tai quay|cua hang|myviettel|viettel money|bidv smartbanking|vcb digibank|mb bank|momo|zalopay)\b/i.test(normalized);
+  const hasSensitiveData = /\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|thong tin ca nhan|so tai khoan)\b/i.test(normalized);
+  const hasUnsafeChannel = /\b(zalo|telegram|whatsapp|ket ban|nhan tin rieng|tai khoan ca nhan)\b/i.test(normalized);
+  const hasSuspiciousUrl = urls.some((url) => isShortenedUrl(url) || /\.(cc|top|xyz|click|shop|live|site|online|vip)\b/i.test(url));
+
+  return hasRoutineContext
+    && !hasRiskyActionRequest(normalized)
+    && !hasSensitiveData
+    && !hasUnsafeChannel
+    && !hasSuspiciousUrl
+    && (!urls.length || hasOfficialChannel || urls.every((url) => isOfficialInfoHost(getUrlHostname(url))))
+    && !/\b(trung thuong|trung giai|nhan qua|phan thuong|phi xac minh|phi ho so|dong phi|chuyen tien vao tai khoan ca nhan)\b/i.test(normalized);
 }
 
 function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
@@ -220,7 +282,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
 
   const normalized = normalizeVietnamese(text);
 
-  if (isPublicSafetyWarning(text)) {
+  if (isPublicSafetyWarning(text) || isRoutineSafeNotice(text)) {
     return {
       risk: "low",
       label: "An toàn",
@@ -269,7 +331,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   const checks: Array<{ pattern: RegExp; reason: string; points: number }> = [
     { pattern: /\b(otp|ma otp|ma xac thuc|mat khau|password|pin)\b/i, reason: "Yêu cầu mã OTP, mật khẩu hoặc mã PIN là dấu hiệu rủi ro cao. Tổ chức thật không hỏi các thông tin này qua tin nhắn.", points: 35 },
     { pattern: /\b(cccd|cmnd|can cuoc|so tai khoan|thong tin ca nhan)\b/i, reason: "Tin nhắn nhắm tới thông tin định danh hoặc tài khoản cá nhân, có thể dùng để chiếm đoạt danh tính.", points: 25 },
-    { pattern: /\b(chuyen tien|nap tien|phi xac minh|phi ho so|phi van chuyen|dong phi|rut het tien)\b/i, reason: "Có yêu cầu chuyển tiền hoặc đóng phí trước. Đây là thủ đoạn phổ biến trong lừa đảo trực tuyến.", points: 30 },
+    { pattern: /\b(chuyen tien|nap tien vao|nap tien de|phi xac minh|phi ho so|phi van chuyen|dong phi|thanh toan phi|rut het tien)\b/i, reason: "Có yêu cầu chuyển tiền hoặc đóng phí trước. Đây là thủ đoạn phổ biến trong lừa đảo trực tuyến.", points: 30 },
     { pattern: /\b(cong an|bo cong an|co quan dieu tra|vien kiem sat|toa an|bat giam|bat giu|rua tien|ma tuy|hinh su)\b/i, reason: "Nội dung giả danh cơ quan pháp luật hoặc dùng cáo buộc hình sự để gây sợ hãi.", points: 28 },
     { pattern: /\b(ngan hang|vietcombank|bidv|techcombank|mb bank|vpbank|agribank|tai khoan bi|dang nhap la|bao mat tai khoan)\b/i, reason: "Tin nhắn giả danh ngân hàng hoặc cảnh báo tài khoản để thúc ép người nhận xác minh gấp.", points: 22 },
     { pattern: /\b(trung thuong|trung giai|nhan qua|phan thuong|iphone|xe sh|tri an khach hang)\b/i, reason: "Nội dung trúng thưởng/quà tặng bất ngờ thường được dùng để dụ nộp phí hoặc lấy thông tin cá nhân.", points: 24 },
