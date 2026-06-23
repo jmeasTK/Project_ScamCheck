@@ -8,6 +8,7 @@ config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const MAX_MESSAGE_LENGTH = 4000;
 
 type GeminiAnalysis = {
   risk?: string;
@@ -125,17 +126,34 @@ function extractUrlsFromText(text: string) {
     });
 }
 
+function isPrivateIPv4(hostname: string) {
+  const parts = hostname.split(".").map((part) => Number(part));
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+
+  return parts[0] === 0
+    || parts[0] === 10
+    || parts[0] === 127
+    || (parts[0] === 169 && parts[1] === 254)
+    || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31)
+    || (parts[0] === 192 && parts[1] === 168);
+}
+
 function isBlockedRedirectHost(rawUrl: string) {
   try {
-    const hostname = new URL(normalizeUrlForFetch(rawUrl)).hostname.toLowerCase();
+    const rawHostname = new URL(normalizeUrlForFetch(rawUrl)).hostname.toLowerCase();
+    const hostname = rawHostname.replace(/^\[/, "").replace(/\]$/, "");
+    const isPrivateIPv6 = hostname.includes(":") && (
+      hostname === "::1"
+      || hostname.startsWith("fc")
+      || hostname.startsWith("fd")
+      || hostname.startsWith("fe80:")
+    );
+
     return hostname === "localhost"
-      || hostname === "127.0.0.1"
-      || hostname === "0.0.0.0"
-      || hostname === "::1"
-      || /^10\./.test(hostname)
-      || /^192\.168\./.test(hostname)
-      || /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
-      || /^169\.254\./.test(hostname);
+      || hostname.endsWith(".localhost")
+      || hostname.endsWith(".local")
+      || isPrivateIPv4(hostname)
+      || isPrivateIPv6;
   } catch {
     return true;
   }
@@ -325,6 +343,10 @@ async function analyzeHandler(req: any, res: any) {
   const message = req.body?.message;
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "Missing message" });
+  }
+
+  if (message.length > MAX_MESSAGE_LENGTH) {
+    return res.status(413).json({ error: "Message too long" });
   }
 
   const analyzedUrls = await analyzeUrls(message);
