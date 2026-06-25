@@ -20,7 +20,7 @@ const HOTLINES = {
   attt: { name: "Cục An toàn thông tin", phone: "1800 1540" },
 };
 
-type Situation = "nothing" | "clicked" | "transferred" | "otp" | null;
+type Situation = "nothing" | "clicked" | "transferred" | "otp" | "installed" | "personalInfo" | null;
 
 const SITUATION_SCRIPTS: Record<Exclude<Situation, "nothing" | null>, { title: string; steps: string[] }> = {
   clicked: {
@@ -51,6 +51,26 @@ const SITUATION_SCRIPTS: Record<Exclude<Situation, "nothing" | null>, { title: s
       "Yêu cầu ngân hàng kiểm tra các giao dịch vừa thực hiện.",
       "Trình báo Công an nếu đã có tiền bị rút đi.",
       "Kích hoạt lại tài khoản chỉ sau khi ngân hàng xác nhận an toàn.",
+    ],
+  },
+  installed: {
+    title: "Bạn đã tải hoặc cài ứng dụng lạ",
+    steps: [
+      "Ngắt mạng tạm thời nếu ứng dụng yêu cầu quyền nhạy cảm hoặc điều khiển thiết bị.",
+      "Gỡ ứng dụng lạ vừa cài và không mở lại tệp tải xuống.",
+      "Kiểm tra quyền truy cập tin nhắn, danh bạ, ảnh, trợ năng và thông báo.",
+      "Đổi mật khẩu email, ngân hàng và mạng xã hội trên một thiết bị an toàn khác.",
+      "Nhờ người tin cậy kiểm tra điện thoại nếu máy có biểu hiện lạ.",
+    ],
+  },
+  personalInfo: {
+    title: "Bạn đã nhập thông tin cá nhân",
+    steps: [
+      "Chụp lại trang đã nhập thông tin để lưu bằng chứng.",
+      "Đổi mật khẩu các tài khoản có liên quan ngay lập tức.",
+      "Không gửi thêm CCCD, ảnh thẻ, số tài khoản hoặc thông tin gia đình.",
+      "Theo dõi cuộc gọi lạ và tin nhắn giả danh trong vài ngày tới.",
+      "Liên hệ ngân hàng nếu đã nhập thông tin thẻ hoặc tài khoản.",
     ],
   },
 };
@@ -1186,6 +1206,8 @@ export default function App() {
                           { value: "clicked", label: "Đã bấm vào đường dẫn" },
                           { value: "transferred", label: "Đã chuyển khoản" },
                           { value: "otp", label: "Đã cung cấp mã OTP (mã xác thực)" },
+                          { value: "installed", label: "Đã tải/cài ứng dụng lạ" },
+                          { value: "personalInfo", label: "Đã nhập thông tin cá nhân" },
                         ] as { value: Situation; label: string }[]).map((opt) => (
                           <button
                             key={opt.value}
