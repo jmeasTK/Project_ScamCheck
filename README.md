@@ -1,6 +1,6 @@
-# ScamCheck
+# Project ScamCheck
 
-ScamCheck là dự án Hackathon FCT 2026 giúp người dùng Việt Nam, đặc biệt là người lớn tuổi, nhận diện dấu hiệu lừa đảo trực tuyến và nhận hướng xử lý an toàn.
+ScamCheck là dự án Hackathon cho trại hè FCT 2026, giúp người dùng Việt Nam, đặc biệt là người lớn tuổi, nhận diện dấu hiệu lừa đảo trực tuyến và nhận hướng xử lý an toàn.
 
 ## Demo
 
@@ -20,6 +20,8 @@ Dự án dùng Vercel thay cho GitHub Pages vì ứng dụng cần serverless AP
 - Lịch sử kiểm tra lưu trên trình duyệt.
 - Tab nhận biết các kịch bản lừa đảo phổ biến.
 
+Model Gemini mặc định là `gemini-3.1-flash-lite`
+
 ## Cách chạy local
 
 Cài dependencies:
@@ -31,7 +33,7 @@ npm install
 Tạo file `.env.local` từ `.env.example` và điền API key thật:
 
 ```env
-GEMINI_API_KEY=your_real_key_here
+GEMINI_API_KEY=api_key
 GEMINI_MODEL=gemini-3.1-flash-lite
 ```
 
@@ -41,7 +43,7 @@ Chạy bằng Vercel Dev để frontend gọi được serverless API:
 vercel dev
 ```
 
-Không dùng `npm run dev` để test AI, vì lệnh đó chỉ chạy Vite frontend và không chạy các API trong thư mục `api/`.
+Không dùng `npm run dev` để test AI, vì nó chỉ chạy Vite frontend và không chạy các API trong thư mục `api/`.
 
 ## Cấu trúc chính
 
@@ -61,4 +63,4 @@ Chỉ commit file `.env.example` vì file này không chứa key thật.
 
 ## Lưu ý pháp lý
 
-ScamCheck là công cụ giáo dục do nhóm học viên phát triển và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
+ScamCheck là công cụ giáo dục do nhóm học viên phát triển, và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
