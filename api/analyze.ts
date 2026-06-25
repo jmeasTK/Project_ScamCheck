@@ -416,7 +416,7 @@ Cấu trúc JSON:
       ],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 1500,
+        maxOutputTokens: 3000,
         responseMimeType: "application/json",
       },
     }),
@@ -429,7 +429,13 @@ Cấu trúc JSON:
   }
 
   const geminiData = JSON.parse(raw);
-  const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+  const candidate = geminiData?.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts?.[0]?.text;
+
+  if (finishReason === "MAX_TOKENS") {
+    return res.status(502).json({ error: "Gemini response truncated" });
+  }
 
   if (!text || typeof text !== "string") {
     return res.status(502).json({ error: "Gemini returned empty result" });

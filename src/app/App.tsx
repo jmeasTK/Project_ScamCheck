@@ -64,7 +64,7 @@ const SAMPLES = [
 ];
 
 type Risk = "high" | "medium" | "low" | null;
-type AnalyzeErrorCode = "invalid_json" | "overloaded" | "quota" | "auth" | "network" | "server" | "ai_error";
+type AnalyzeErrorCode = "invalid_json" | "truncated" | "overloaded" | "quota" | "auth" | "network" | "server" | "ai_error";
 
 class AnalyzeError extends Error {
   code: AnalyzeErrorCode;
@@ -82,8 +82,15 @@ function getAnalyzeErrorToast(error: unknown) {
   if (error instanceof AnalyzeError) {
     if (error.code === "invalid_json") {
       return {
-        title: "AI trả kết quả chưa hoàn chỉnh",
-        description: "Gemini phản hồi thiếu định dạng cần thiết, nên ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
+        title: "AI trả kết quả chưa đúng định dạng",
+        description: "Gemini phản hồi không đúng cấu trúc JSON cần thiết, nên ScamCheck đã dùng bộ phân tích dự phòng.",
+      };
+    }
+
+    if (error.code === "truncated") {
+      return {
+        title: "AI bị cắt ngắn kết quả",
+        description: "Gemini chưa trả đủ JSON trước khi dừng. ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
@@ -789,8 +796,12 @@ export default function App() {
       const detail = typeof data?.detail === "string" ? data.detail : "";
       const errorText = `${data?.error ?? ""} ${detail}`.toLowerCase();
 
+      if (data?.error === "Gemini response truncated") {
+        throw new AnalyzeError("truncated", "Gemini bị cắt ngắn kết quả", response.status);
+      }
+
       if (data?.error === "Gemini returned invalid JSON") {
-        throw new AnalyzeError("invalid_json", "Gemini chưa trả xong kết quả phân tích", response.status);
+        throw new AnalyzeError("invalid_json", "Gemini trả sai định dạng JSON", response.status);
       }
 
       if (response.status === 401 || errorText.includes("unauthenticated") || errorText.includes("api key") || errorText.includes("authentication")) {
