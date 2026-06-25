@@ -21,6 +21,41 @@ type GeminiAnalysis = {
   } | null;
 };
 
+const GEMINI_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    risk: {
+      type: "string",
+      enum: ["An toàn", "Nghi ngờ", "Lừa đảo"],
+    },
+    detective: { type: "string" },
+    indicators: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          quote: { type: "string" },
+          reason: { type: "string" },
+        },
+        required: ["quote", "reason"],
+      },
+    },
+    actions: {
+      type: "array",
+      items: { type: "string" },
+    },
+    psychology: {
+      type: "object",
+      nullable: true,
+      properties: {
+        manipulation: { type: "string" },
+        advice: { type: "string" },
+      },
+      required: ["manipulation", "advice"],
+    },
+  },
+  required: ["risk", "detective", "indicators", "actions", "psychology"],
+};
 function extractJsonObject(text: string) {
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   const firstBrace = cleaned.indexOf("{");
@@ -418,6 +453,7 @@ Cấu trúc JSON:
         temperature: 0.2,
         maxOutputTokens: 3000,
         responseMimeType: "application/json",
+        responseSchema: GEMINI_RESPONSE_SCHEMA,
       },
     }),
   });
