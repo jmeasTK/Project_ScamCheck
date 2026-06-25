@@ -20,7 +20,7 @@ Dự án dùng Vercel thay cho GitHub Pages vì ứng dụng cần serverless AP
 - Bộ phân tích dự phòng sẽ hoạt động khi không thể kết nối tới Gemini.
 - Lịch sử kiểm tra lưu trên trình duyệt.
 
-Model Gemini mặc định là `gemini-3.1-flash-lite`
+**Note:** Model Gemini được khuyến khích sử dụng: `gemini-3.1-flash-lite`
 
 ## Cách chạy local
 
