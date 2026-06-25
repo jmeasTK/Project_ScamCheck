@@ -1,13 +1,64 @@
-﻿# Project ScamCheck
+# ScamCheck
 
-Dự án ScamCheck - FPT Hackathon 2026.
+ScamCheck là dự án Hackathon FCT 2026 giúp người dùng Việt Nam, đặc biệt là người lớn tuổi, nhận diện dấu hiệu lừa đảo trực tuyến và nhận hướng xử lý an toàn.
 
-ScamCheck giúp người dùng nhận diện dấu hiệu lừa đảo trực tuyến và đưa ra hướng xử lý an toàn.
+## Demo
 
-## Running the code
+- Link sản phẩm: https://project-scam-check.vercel.app/
+- Nền tảng deploy: Vercel
 
-Run `npm install` to install dependencies.
+Dự án dùng Vercel thay cho GitHub Pages vì ứng dụng cần serverless API để gọi Gemini mà không làm lộ API key trên trình duyệt.
 
-Run `npm run dev` to start the Vite development server.
+## Tính năng chính
 
-For local API testing with Vercel functions, run `vercel dev` and configure `GEMINI_API_KEY` in `.env.local`.
+- Phân tích nội dung tin nhắn bằng Gemini.
+- Soi và mở rộng đường dẫn rút gọn trước khi phân tích.
+- Hiển thị mức độ rủi ro: An toàn, Nghi ngờ, Lừa đảo.
+- Giải thích dấu hiệu đáng ngờ bằng vai Thám tử.
+- Trấn an và hướng dẫn người dùng bằng vai Cô tâm lý.
+- Bộ phân tích dự phòng khi không kết nối được AI.
+- Lịch sử kiểm tra lưu trên trình duyệt.
+- Tab nhận biết các kịch bản lừa đảo phổ biến.
+
+## Cách chạy local
+
+Cài dependencies:
+
+```bash
+npm install
+```
+
+Tạo file `.env.local` từ `.env.example` và điền API key thật:
+
+```env
+GEMINI_API_KEY=your_real_key_here
+GEMINI_MODEL=gemini-3.1-flash-lite
+```
+
+Chạy bằng Vercel Dev để frontend gọi được serverless API:
+
+```bash
+vercel dev
+```
+
+Không dùng `npm run dev` để test AI, vì lệnh đó chỉ chạy Vite frontend và không chạy các API trong thư mục `api/`.
+
+## Cấu trúc chính
+
+```text
+api/analyze.ts        API phân tích tin nhắn bằng Gemini
+api/urls.ts           API tách và mở rộng đường dẫn rút gọn
+src/app/App.tsx       Giao diện và bộ phân tích dự phòng
+index.html            Metadata, title, favicon
+vercel.json           Cấu hình build/deploy Vercel
+```
+
+## Bảo mật API key
+
+API key Gemini không được đưa lên GitHub. File `.env.local` bị bỏ qua bởi `.gitignore`.
+
+Chỉ commit file `.env.example` vì file này không chứa key thật.
+
+## Lưu ý pháp lý
+
+ScamCheck là công cụ giáo dục do nhóm học viên phát triển và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
