@@ -54,7 +54,7 @@ const SITUATION_SCRIPTS: Record<Exclude<Situation, "nothing" | null>, { title: s
     ],
   },
   installed: {
-    title: "Bạn đã tải hoặc cài ứng dụng lạ",
+    title: "Bạn đã tải hoặc cài đặt ứng dụng lạ",
     steps: [
       "Ngắt mạng tạm thời nếu ứng dụng yêu cầu quyền nhạy cảm hoặc điều khiển thiết bị.",
       "Gỡ ứng dụng lạ vừa cài và không mở lại tệp tải xuống.",
@@ -1206,7 +1206,7 @@ export default function App() {
                           { value: "clicked", label: "Đã bấm vào đường dẫn" },
                           { value: "transferred", label: "Đã chuyển khoản" },
                           { value: "otp", label: "Đã cung cấp mã OTP (mã xác thực)" },
-                          { value: "installed", label: "Đã tải/cài ứng dụng lạ" },
+                          { value: "installed", label: "Đã tải/cài đặt ứng dụng lạ" },
                           { value: "personalInfo", label: "Đã nhập thông tin cá nhân" },
                         ] as { value: Situation; label: string }[]).map((opt) => (
                           <button
