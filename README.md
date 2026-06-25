@@ -30,11 +30,11 @@ Cài dependencies (nếu cần):
 npm install
 ```
 
-Tạo file `.env.local` từ `.env.example` và điền API key thật:
+Tạo file `.env.local` từ `.env.example`, điền API key và model:
 
 ```env
 GEMINI_API_KEY=api_key
-GEMINI_MODEL=gemini-3.1-flash-lite
+GEMINI_MODEL=gemini_model
 ```
 
 Chạy bằng Vercel Dev để frontend gọi được serverless API:
