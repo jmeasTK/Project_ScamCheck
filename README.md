@@ -59,7 +59,7 @@ vercel.json           Cấu hình build/deploy Vercel
 
 API key Gemini không được đưa lên GitHub. File `.env.local` bị bỏ qua bởi `.gitignore`.
 
-Note: File `.env.example` là file ví dụ, không chứa key thật.
+**Note**: File `.env.example` là file ví dụ, không chứa key thật.
 
 ## Lưu ý pháp lý
 
