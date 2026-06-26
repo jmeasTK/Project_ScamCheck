@@ -369,6 +369,33 @@ function formatUrlReport(urls: UrlAnalysis[]) {
   }).join("\n");
 }
 
+function getResolvedShortUrlIndicators(urls: UrlAnalysis[]) {
+  return urls
+    .filter((item) => item.isShortened)
+    .map((item) => {
+      const expandedHost = getUrlHostname(item.expanded);
+      const quote = item.resolved ? `${item.original} (${item.expanded})` : item.original;
+      const reason = item.resolved
+        ? `Đường dẫn rút gọn đã được mở rộng tới ${expandedHost || item.expanded}. Tin nhắn có thể vẫn an toàn nếu nguồn gửi đáng tin, nhưng nên kiểm tra domain đích trước khi mở.`
+        : "Đây là đường dẫn rút gọn, nhưng ScamCheck chưa mở rộng được trong thời gian cho phép. Nếu cần mở, hãy kiểm tra lại nguồn gửi trước.";
+
+      return { quote, reason };
+    });
+}
+
+function withResolvedUrlIndicators<T extends ReturnType<typeof normalizeAnalysis>>(analysis: T, urls: UrlAnalysis[]) {
+  const urlIndicators = getResolvedShortUrlIndicators(urls);
+  if (!urlIndicators.length) return analysis;
+
+  const existingQuotes = new Set(analysis.indicators.map((item) => item.quote.toLowerCase()));
+  const missingUrlIndicators = urlIndicators.filter((item) => !existingQuotes.has(item.quote.toLowerCase()));
+  if (!missingUrlIndicators.length) return analysis;
+
+  return {
+    ...analysis,
+    indicators: [...missingUrlIndicators, ...analysis.indicators].slice(0, 4),
+  };
+}
 function getGeminiModelsToTry() {
   return Array.from(new Set([PRIMARY_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS]));
 }
@@ -552,7 +579,7 @@ Yêu cầu bắt buộc:
 - Link rút gọn là dấu hiệu giảm minh bạch, không tự động là "Lừa đảo". Nếu link mở rộng tới nền tảng quen thuộc như youtube.com, drive.google.com, docs.google.com, hãy nói đúng domain đích và đánh giá theo ngữ cảnh tin nhắn. Không truy cập hay suy đoán nội dung bên trong Drive/Docs/Forms; chỉ phân tích URL/domain và nội dung tin nhắn.
 - Nếu không mở rộng được link rút gọn, coi đó là dấu hiệu cần xác minh. Chỉ nâng lên "Lừa đảo" khi đi kèm yêu cầu rủi ro như đăng nhập, cung cấp thông tin, tải file lạ, chuyển tiền, nhận thưởng, hoặc áp lực gấp.
 - detective là lời của nhân vật "Thám tử phân tích": 1 đoạn tối đa 80 chữ, đi thẳng vào kết luận và bằng chứng chính.
-- indicators là tối đa 5 dấu hiệu nghi ngờ. quote phải là đoạn có thật trong tin nhắn. Nếu có link rút gọn đã được mở rộng trong phần "Các đường dẫn", quote phải gộp thành đúng dạng "link rút gọn (link sau khi mở rộng)" trong một indicator duy nhất, không tách thành hai indicator. Nếu risk là "An toàn", indicators là mảng rỗng.
+- indicators là tối đa 5 điểm cần chú ý. quote phải là đoạn có thật trong tin nhắn. Nếu có link rút gọn đã được mở rộng trong phần "Các đường dẫn", quote phải gộp thành đúng dạng "link rút gọn (link sau khi mở rộng)" trong một indicator duy nhất, không tách thành hai indicator. Nếu risk là "An toàn" nhưng có link rút gọn đã mở rộng, vẫn đưa indicator trung lập để người dùng thấy domain đích; nếu không có điểm cần chú ý thì indicators là mảng rỗng.
 - actions là tối đa 4 việc nên làm, mỗi việc tối đa 40 chữ, cụ thể và an toàn. Chỉ đưa actions khi có rủi ro lừa đảo hoặc có bước an toàn thật sự quan trọng. Nếu risk là "An toàn" và không có việc phòng tránh lừa đảo cần làm, actions phải là mảng rỗng []. Không đưa lời khuyên đời sống không liên quan đến lừa đảo.
 - psychology là lời của nhân vật "Cô tâm lý": nếu có rủi ro, manipulation ngắn gọn và advice có thể dài tối đa 100 chữ, trấn an người dùng, không làm họ xấu hổ. Nếu risk là "An toàn", psychology là null.
 - Nếu cần trích dẫn quote từ tin nhắn gốc, giữ nguyên quote theo tin nhắn gốc. Nhưng mọi phần phân tích/lý do/lời khuyên do bạn tự viết phải có dấu tiếng Việt đầy đủ.
@@ -583,7 +610,7 @@ Cấu trúc JSON:
   const geminiResult = await generateGeminiAnalysis(apiKey, prompt);
 
   if (geminiResult.ok) {
-    return res.status(200).json(geminiResult.data);
+    return res.status(200).json(withResolvedUrlIndicators(geminiResult.data, analyzedUrls));
   }
 
   const lastFailure = geminiResult.attempts[geminiResult.attempts.length - 1];

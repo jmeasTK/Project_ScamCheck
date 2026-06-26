@@ -378,17 +378,39 @@ function isCommunitySafetyNotice(text: string) {
     && (!urls.length || !hasSuspiciousUrl);
 }
 
+function getResolvedShortUrlIndicators(text: string, resolvedUrls: UrlAnalysis[] = []) {
+  return extractUrlsFromText(text)
+    .map((url): Indicator | null => {
+      const resolvedInfo = resolvedUrls.find((item) => item.original.toLowerCase() === url.toLowerCase());
+      const isShortened = resolvedInfo?.isShortened ?? isShortenedUrl(url);
+      if (!isShortened) return null;
+
+      const expandedUrl = resolvedInfo?.expanded || url;
+      const expandedHost = getUrlHostname(expandedUrl);
+      const resolvedShortUrl = Boolean(resolvedInfo?.resolved && expandedUrl !== url);
+
+      return {
+        quote: resolvedShortUrl ? `${url} (${expandedUrl})` : url,
+        reason: resolvedShortUrl
+          ? `Đường dẫn rút gọn đã được mở rộng tới ${expandedHost || expandedUrl}. Tin nhắn có thể vẫn an toàn nếu bạn tin nguồn gửi, nhưng nên kiểm tra domain đích trước khi mở.`
+          : "Đây là đường dẫn rút gọn, nhưng ScamCheck chưa mở rộng được trong thời gian cho phép. Nếu cần mở, hãy kiểm tra lại nguồn gửi trước.",
+      };
+    })
+    .filter((item): item is Indicator => Boolean(item));
+}
 function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
   const normalized = normalizeVietnamese(text);
 
   if (isPublicSafetyWarning(text) || isRoutineSafeNotice(text) || isCommunitySafetyNotice(text)) {
+    const safeUrlIndicators = getResolvedShortUrlIndicators(text, resolvedUrls);
+
     return {
       risk: "low",
       label: "An toàn",
-      highlights: [],
-      indicators: [],
+      highlights: getIndicatorQuotes(safeUrlIndicators),
+      indicators: safeUrlIndicators,
       detective: "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
       actions: [],
       usedFallback: true,
@@ -1085,7 +1107,7 @@ export default function App() {
           <div className="space-y-4">
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-4 lg:self-start">
               <div>
-                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Thử nghiệm tính năng:</p>
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Thử tính năng:</p>
                 <div className="flex flex-wrap gap-2">
                   {SAMPLES.map((s) => (
                     <button
