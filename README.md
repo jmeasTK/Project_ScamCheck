@@ -17,7 +17,7 @@ Dự án dùng Vercel thay cho GitHub Pages vì ứng dụng cần serverless AP
 - Hiển thị mức độ rủi ro: An toàn, Nghi ngờ, Lừa đảo.
 - Giải thích dấu hiệu đáng ngờ bằng nhân vật Thám tử.
 - Trấn an và hướng dẫn người dùng bằng nhân vật Cô tâm lý.
-- Bộ phân tích dự phòng sẽ hoạt động khi không thể kết nối tới Gemini.
+- Bộ phân tích dự phòng sẽ hoạt động khi không thể kết nối hoặc gặp sự cố với Gemini.
 - Lịch sử kiểm tra lưu trên trình duyệt.
 
 Model Gemini mặc định: `gemini-3.1-flash-lite`
@@ -60,7 +60,7 @@ vercel.json           Cấu hình build/deploy Vercel
 
 API key Gemini không được đưa lên GitHub. File `.env.local` bị bỏ qua bởi `.gitignore`.
 
-**Note**: File `.env.example` là file ví dụ, không chứa key thật.
+**Note**: File `.env.example` là file ví dụ, không chứa API key.
 
 ## Lưu ý pháp lý
 
