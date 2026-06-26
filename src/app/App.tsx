@@ -1138,7 +1138,7 @@ export default function App() {
                 disabled={loading}
                 placeholder="Dán hoặc gõ nội dung tin nhắn nghi ngờ vào đây..."
                 rows={5}
-                className="w-full resize-y rounded-xl border border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] disabled:opacity-60 disabled:cursor-not-allowed disabled:resize-none disabled:bg-gray-100 dark:disabled:bg-gray-950 transition min-h-[120px] lg:min-h-[140px]"
+                className="w-full resize-y rounded-xl border border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] disabled:cursor-not-allowed disabled:resize-none disabled:bg-[#f8f9ff] dark:disabled:bg-gray-900 disabled:text-gray-700 dark:disabled:text-gray-200 disabled:placeholder:text-gray-400 dark:disabled:placeholder:text-gray-500 transition min-h-[120px] lg:min-h-[140px]"
               />
               </div>
 
