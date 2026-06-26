@@ -1,4 +1,4 @@
-﻿import { useState, useEffect } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { Sun, Moon, WifiOff } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
@@ -557,18 +557,18 @@ type HistoryItem = {
 };
 
 function getFallbackDetective(risk: Risk) {
-  if (risk === "high") return "Toi phat hien dau hieu lua dao ro rang trong tin nhan nay. Noi dung co yeu to thuc ep, gia danh hoac dan du nguoi nhan hanh dong ngay.";
-  if (risk === "medium") return "Tin nhan nay co mot so yeu to dang ngo. Chua du bang chung ket luan chac chan, nhung nguoi nhan nen xac minh qua kenh chinh thuc truoc khi lam theo.";
-  if (risk === "low") return "Qua phan tich, toi chua thay dau hieu lua dao ro rang trong tin nhan nay. Tuy vay, van nen giu thoi quen bao ve thong tin ca nhan.";
+  if (risk === "high") return "Tôi phát hiện dấu hiệu lừa đảo rõ ràng trong tin nhắn này. Nội dung có yếu tố thúc ép, giả danh hoặc dẫn dụ người nhận hành động ngay.";
+  if (risk === "medium") return "Tin nhắn này có một số yếu tố đáng ngờ. Chưa đủ bằng chứng để kết luận chắc chắn, nhưng người nhận nên xác minh qua kênh chính thức trước khi làm theo.";
+  if (risk === "low") return "Qua phân tích, tôi chưa thấy dấu hiệu lừa đảo rõ ràng trong tin nhắn này. Tuy vậy, vẫn nên giữ thói quen bảo vệ thông tin cá nhân.";
   return "";
 }
 
 function getFallbackActions(risk: Risk) {
   if (risk === "high") {
     return [
-      "Khong nhap vao duong dan hoac lam theo yeu cau trong tin nhan.",
-      "Khong cung cap ma OTP, mat khau hoac thong tin ca nhan.",
-      "Goi ngan hang, co quan chuc nang hoac nguoi than tin cay de xac minh.",
+      "Không nhấp vào đường dẫn hoặc làm theo yêu cầu trong tin nhắn.",
+      "Không cung cấp mã OTP, mật khẩu hoặc thông tin cá nhân.",
+      "Gọi ngân hàng, cơ quan chức năng hoặc người thân tin cậy để xác minh.",
     ];
   }
   if (risk === "medium") {
@@ -582,8 +582,8 @@ function getFallbackActions(risk: Risk) {
 }
 
 function getFallbackPsychology(risk: Risk) {
-  if (risk === "high") return "Cam giac lo lang la binh thuong vi ke lua dao thuong tao ap luc rat manh. Hay dung lai, hit tho va xac minh voi nguoi than hoac kenh chinh thuc truoc khi lam gi.";
-  if (risk === "medium") return "Cam giac phan van la tin hieu tot de ban cham lai. Khong co viec an toan nao bat buoc phai quyet dinh trong vai phut.";
+  if (risk === "high") return "Cảm giác lo lắng là bình thường vì kẻ lừa đảo thường tạo áp lực rất mạnh. Hãy dừng lại, hít thở và xác minh với người thân hoặc kênh chính thức trước khi làm gì.";
+  if (risk === "medium") return "Cảm giác phân vân là tín hiệu tốt để bạn chậm lại. Không có việc an toàn nào bắt buộc phải quyết định trong vài phút.";
   return "";
 }
 
@@ -769,11 +769,28 @@ export default function App() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [selectedHistory, setSelectedHistory] = useState<HistoryItem | null>(null);
   const [situation, setSituation] = useState<Situation>(null);
+  const [isTabPinned, setIsTabPinned] = useState(false);
+  const tabsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
     try { localStorage.setItem("scamcheck-dark", String(dark)); } catch {}
   }, [dark]);
+
+  useEffect(() => {
+    const updateTabPinnedState = () => {
+      const top = tabsRef.current?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY;
+      setIsTabPinned(window.scrollY > 0 && top <= 9);
+    };
+
+    updateTabPinnedState();
+    window.addEventListener("scroll", updateTabPinnedState, { passive: true });
+    window.addEventListener("resize", updateTabPinnedState);
+    return () => {
+      window.removeEventListener("scroll", updateTabPinnedState);
+      window.removeEventListener("resize", updateTabPinnedState);
+    };
+  }, []);
 
   useEffect(() => {
     try { localStorage.setItem("scamcheck-history", JSON.stringify(history)); } catch {}
@@ -1041,23 +1058,26 @@ export default function App() {
         </div>
 
         {/* Tabs — sticky on mobile */}
-        <div className="sticky top-2 z-30 flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-gray-700 mx-[3px]">
-          {(["check", "expose", "history"] as const).map((t) => {
-            const labels = { check: "Kiểm tra", expose: "Nhận biết lừa đảo", history: "Lịch sử" };
-            return (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 ${
-                  tab === t
-                    ? "bg-[#2563eb] text-white shadow"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95"
-                }`}
-              >
-                {labels[t]}
-              </button>
-            );
-          })}
+        <div ref={tabsRef} className="sticky top-2 z-30 relative mx-[3px]">
+          <div className={`pointer-events-none absolute -left-3 -right-3 -top-2 h-32 bg-gradient-to-b from-[#f0f4ff] via-[#f0f4ff]/95 via-45% to-transparent dark:from-gray-900 dark:via-gray-900/95 transition-opacity duration-200 ${isTabPinned ? "opacity-100" : "opacity-0"}`} />
+          <div className="relative z-10 flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-gray-700">
+            {(["check", "expose", "history"] as const).map((t) => {
+              const labels = { check: "Kiểm tra", expose: "Nhận biết lừa đảo", history: "Lịch sử" };
+              return (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`flex-1 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all duration-150 ${
+                    tab === t
+                      ? "bg-[#2563eb] text-white shadow"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 active:scale-95"
+                  }`}
+                >
+                  {labels[t]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {/* Tab: Check */}
