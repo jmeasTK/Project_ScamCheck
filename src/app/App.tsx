@@ -1112,12 +1112,13 @@ export default function App() {
                   {SAMPLES.map((s) => (
                     <button
                       key={s.label}
+                      disabled={loading}
                       onClick={() => {
                         setInput(s.text);
                         setAnalysis({ risk: null, label: "", highlights: [] });
                         setSituation(null);
                       }}
-                      className="text-xs border border-gray-200 dark:border-gray-600 rounded-full px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 hover:text-blue-700 dark:hover:text-blue-400 hover:shadow-sm hover:scale-105 active:scale-95 transition-all duration-150"
+                      className="text-xs border border-gray-200 dark:border-gray-600 rounded-full px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 hover:text-blue-700 dark:hover:text-blue-400 hover:shadow-sm hover:scale-105 active:scale-95 disabled:opacity-45 disabled:grayscale disabled:cursor-not-allowed disabled:hover:bg-gray-50 dark:disabled:hover:bg-gray-700 disabled:hover:border-gray-200 dark:disabled:hover:border-gray-600 disabled:hover:text-gray-700 dark:disabled:hover:text-gray-300 disabled:hover:shadow-none disabled:hover:scale-100 transition-all duration-150"
                     >
                       {s.label}
                     </button>
@@ -1134,9 +1135,10 @@ export default function App() {
                 value={input}
                 onChange={(e) => { setInput(e.target.value.slice(0, MAX_MESSAGE_LENGTH)); setAnalysis({ risk: null, label: "", highlights: [] }); setSituation(null); }}
                 maxLength={MAX_MESSAGE_LENGTH}
+                disabled={loading}
                 placeholder="Dán hoặc gõ nội dung tin nhắn nghi ngờ vào đây..."
                 rows={5}
-                className="w-full resize-y rounded-xl border border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] transition min-h-[120px] lg:min-h-[140px]"
+                className="w-full resize-y rounded-xl border border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] disabled:opacity-60 disabled:cursor-not-allowed disabled:resize-none disabled:bg-gray-100 dark:disabled:bg-gray-950 transition min-h-[120px] lg:min-h-[140px]"
               />
               </div>
 
