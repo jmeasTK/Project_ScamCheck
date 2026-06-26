@@ -21,6 +21,7 @@ Dự án dùng Vercel thay cho GitHub Pages vì ứng dụng cần serverless AP
 - Lịch sử kiểm tra lưu trên trình duyệt.
 
 Model Gemini mặc định: `gemini-3.1-flash-lite`
+
 Model Gemini dự phòng: `gemini-2.5-flash`
 
 ## Cách chạy local
