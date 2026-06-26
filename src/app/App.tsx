@@ -1059,7 +1059,7 @@ export default function App() {
 
         {/* Tabs — sticky on mobile */}
         <div ref={tabsRef} className="sticky top-2 z-30 relative mx-[3px]">
-          <div className={`pointer-events-none absolute -left-3 -right-3 -top-2 h-32 bg-gradient-to-b from-[#f0f4ff] via-[#f0f4ff]/95 via-45% to-transparent dark:from-gray-900 dark:via-gray-900/95 transition-opacity duration-200 ${isTabPinned ? "opacity-100" : "opacity-0"}`} />
+          <div className={`pointer-events-none absolute -left-3 -right-3 -top-2 h-32 bg-gradient-to-b from-[#f0f4ff] via-[#f0f4ff]/95 via-45% to-transparent dark:from-gray-900 dark:via-gray-900/95 transition-opacity duration-150 ${isTabPinned ? "opacity-100" : "opacity-0"}`} />
           <div className="relative z-10 flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-gray-700">
             {(["check", "expose", "history"] as const).map((t) => {
               const labels = { check: "Kiểm tra", expose: "Nhận biết lừa đảo", history: "Lịch sử" };
