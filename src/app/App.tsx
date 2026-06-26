@@ -1090,7 +1090,11 @@ export default function App() {
                   {SAMPLES.map((s) => (
                     <button
                       key={s.label}
-                      onClick={() => setInput(s.text)}
+                      onClick={() => {
+                        setInput(s.text);
+                        setAnalysis({ risk: null, label: "", highlights: [] });
+                        setSituation(null);
+                      }}
                       className="text-xs border border-gray-200 dark:border-gray-600 rounded-full px-3 py-1.5 text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-300 hover:text-blue-700 dark:hover:text-blue-400 hover:shadow-sm hover:scale-105 active:scale-95 transition-all duration-150"
                     >
                       {s.label}
