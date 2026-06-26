@@ -7,7 +7,11 @@ declare const process: {
 config({ path: ".env.local", quiet: true });
 config({ quiet: true });
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const PRIMARY_GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
+const FALLBACK_GEMINI_MODELS = (process.env.GEMINI_FALLBACK_MODELS || "gemini-2.5-flash")
+  .split(",")
+  .map((model) => model.trim())
+  .filter(Boolean);
 const MAX_MESSAGE_LENGTH = 4000;
 
 type GeminiAnalysis = {
@@ -365,6 +369,146 @@ function formatUrlReport(urls: UrlAnalysis[]) {
   }).join("\n");
 }
 
+function getGeminiModelsToTry() {
+  return Array.from(new Set([PRIMARY_GEMINI_MODEL, ...FALLBACK_GEMINI_MODELS]));
+}
+
+function isRetryableGeminiFailure(status: number | undefined, detail: string) {
+  if (status && [429, 500, 502, 503, 504].includes(status)) return true;
+  return /overload|overloaded|unavailable|temporarily|rate limit|resource_exhausted|deadline|timeout/i.test(detail);
+}
+
+async function requestGeminiAnalysis(apiKey: string, prompt: string, model: string): Promise<
+  | { ok: true; model: string; data: ReturnType<typeof normalizeAnalysis> }
+  | { ok: false; failure: GeminiAttemptFailure }
+> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+  let geminiResponse: Response;
+  try {
+    geminiResponse = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }],
+          },
+        ],
+        generationConfig: {
+          temperature: 0.2,
+          maxOutputTokens: 3000,
+          responseMimeType: "application/json",
+          responseSchema: GEMINI_RESPONSE_SCHEMA,
+        },
+      }),
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini API error",
+        detail,
+        retryable: true,
+      },
+    };
+  }
+
+  const raw = await geminiResponse.text();
+
+  if (!geminiResponse.ok) {
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini API error",
+        status: geminiResponse.status,
+        detail: raw,
+        retryable: isRetryableGeminiFailure(geminiResponse.status, raw),
+      },
+    };
+  }
+
+  let geminiData: any;
+  try {
+    geminiData = JSON.parse(raw);
+  } catch {
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini returned invalid JSON",
+        detail: raw.slice(0, 500),
+        retryable: true,
+      },
+    };
+  }
+
+  const candidate = geminiData?.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  const text = candidate?.content?.parts?.[0]?.text;
+
+  if (finishReason === "MAX_TOKENS") {
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini response truncated",
+        detail: raw.slice(0, 500),
+        retryable: true,
+      },
+    };
+  }
+
+  if (!text || typeof text !== "string") {
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini returned empty result",
+        detail: raw.slice(0, 500),
+        retryable: true,
+      },
+    };
+  }
+
+  try {
+    try {
+      return { ok: true, model, data: normalizeAnalysis(JSON.parse(text)) };
+    } catch {
+      return { ok: true, model, data: normalizeAnalysis(JSON.parse(extractJsonObject(text))) };
+    }
+  } catch {
+    return {
+      ok: false,
+      failure: {
+        model,
+        error: "Gemini returned invalid JSON",
+        detail: text.slice(0, 500),
+        retryable: true,
+      },
+    };
+  }
+}
+
+async function generateGeminiAnalysis(apiKey: string, prompt: string) {
+  const attempts: GeminiAttemptFailure[] = [];
+
+  for (const model of getGeminiModelsToTry()) {
+    const result = await requestGeminiAnalysis(apiKey, prompt, model);
+    if (result.ok) return result;
+
+    attempts.push(result.failure);
+    if (!result.failure.retryable) break;
+  }
+
+  return { ok: false as const, attempts };
+}
 async function analyzeHandler(req: any, res: any) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -435,65 +579,32 @@ Cấu trúc JSON:
 }
 `;
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+  const geminiResult = await generateGeminiAnalysis(apiKey, prompt);
 
-  const geminiResponse = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 3000,
-        responseMimeType: "application/json",
-        responseSchema: GEMINI_RESPONSE_SCHEMA,
-      },
-    }),
+  if (geminiResult.ok) {
+    return res.status(200).json(geminiResult.data);
+  }
+
+  const lastFailure = geminiResult.attempts[geminiResult.attempts.length - 1];
+  console.error("Gemini analysis failed", {
+    attempts: geminiResult.attempts.map((attempt) => ({
+      model: attempt.model,
+      error: attempt.error,
+      status: attempt.status,
+      retryable: attempt.retryable,
+    })),
+    preview: lastFailure?.detail?.slice(0, 500),
   });
 
-  const raw = await geminiResponse.text();
-
-  if (!geminiResponse.ok) {
-    return res.status(502).json({ error: "Gemini API error", detail: raw });
-  }
-
-  const geminiData = JSON.parse(raw);
-  const candidate = geminiData?.candidates?.[0];
-  const finishReason = candidate?.finishReason;
-  const text = candidate?.content?.parts?.[0]?.text;
-
-  if (finishReason === "MAX_TOKENS") {
-    return res.status(502).json({ error: "Gemini response truncated" });
-  }
-
-  if (!text || typeof text !== "string") {
-    return res.status(502).json({ error: "Gemini returned empty result" });
-  }
-
-  try {
-    try {
-      return res.status(200).json(normalizeAnalysis(JSON.parse(text)));
-    } catch {
-      return res.status(200).json(normalizeAnalysis(JSON.parse(extractJsonObject(text))));
-    }
-  } catch (error) {
-    console.error("Could not parse Gemini response", {
-      error: error instanceof Error ? error.message : String(error),
-      preview: text.slice(0, 500),
-    });
-
-    return res.status(502).json({
-      error: "Gemini returned invalid JSON",
-      detail: text.slice(0, 500),
-    });
-  }
+  return res.status(502).json({
+    error: lastFailure?.error || "Gemini API error",
+    detail: lastFailure?.detail || "All Gemini models failed",
+    attempts: geminiResult.attempts.map((attempt) => ({
+      model: attempt.model,
+      error: attempt.error,
+      status: attempt.status,
+    })),
+  });
 }
 export default async function handler(req: any, res: any) {
   try {
