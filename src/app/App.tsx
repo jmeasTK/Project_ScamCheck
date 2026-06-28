@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Sun, Moon, WifiOff } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
@@ -103,56 +103,56 @@ function getAnalyzeErrorToast(error: unknown) {
     if (error.code === "invalid_json") {
       return {
         title: "AI trả kết quả chưa đúng định dạng",
-        description: "Gemini phản hồi không đúng cấu trúc JSON cần thiết, nên ScamCheck đã dùng bộ phân tích dự phòng.",
+        description: "Gemini phản hồi không đúng cấu trúc JSON. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "truncated") {
       return {
-        title: "AI bị cắt ngắn kết quả",
-        description: "Gemini chưa trả đủ JSON trước khi dừng. ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
+        title: "AI trả về kết quả lỗi",
+        description: "ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "overloaded") {
       return {
-        title: "Gemini đang quá tải",
-        description: "Model hiện phản hồi chậm hoặc báo quá tải. ScamCheck đã chuyển sang bộ phân tích dự phòng để bạn vẫn có kết quả ngay.",
+        title: "AI đang bị quá tải",
+        description: "Máy chủ AI hiện phản hồi chậm hoặc báo quá tải. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "quota") {
       return {
-        title: "Gemini bị giới hạn lượt gọi",
-        description: "API key có thể đã hết quota hoặc bị giới hạn tạm thời. ScamCheck đã dùng bộ phân tích dự phòng.",
+        title: "AI bị giới hạn lượt gọi",
+        description: "API key có thể đã bị giới hạn tạm thời. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "auth") {
       return {
-        title: "Gemini API key không hợp lệ",
-        description: "Máy chủ không xác thực được API key. Kiểm tra lại biến GEMINI_API_KEY trên Vercel khi có thời gian.",
+        title: "API key không hợp lệ",
+        description: "Máy chủ không xác thực được API key. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "network") {
       return {
-        title: "Không kết nối được tới máy chủ AI",
-        description: "Mạng hoặc máy chủ phản hồi không ổn định. ScamCheck đã dùng bộ phân tích dự phòng thay vì dừng kiểm tra.",
+        title: "Không thể kết nối tới máy chủ AI",
+        description: "Mạng hoặc máy chủ phản hồi không ổn định. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
     if (error.code === "server") {
       return {
         title: "Máy chủ AI gặp lỗi",
-        description: error.status ? `API trả lỗi ${error.status}. ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.` : "ScamCheck đã dùng bộ phân tích dự phòng cho lần kiểm tra này.",
+        description: error.status ? `API trả về lỗi ${error.status}. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.` : "ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
   }
 
   return {
     title: "Không thể dùng AI lúc này",
-    description: "ScamCheck đã dùng bộ phân tích dự phòng để bạn vẫn có kết quả kiểm tra.",
+    description: "ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
   };
 }
 
@@ -166,6 +166,7 @@ type UrlAnalysis = {
   expanded: string;
   isShortened: boolean;
   resolved: boolean;
+  invalidTarget?: boolean;
 };
 
 interface Analysis {
@@ -286,16 +287,22 @@ function extractUrlsFromText(text: string) {
 }
 
 function hasProtectiveInstruction(normalized: string) {
-  return /\b(khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|khong dang nhap|khong goi lai|khong tham gia|khong to chuc|khong danh bac|khong ca do|khong tiep tay|dung bam|dung cung cap|canh giac|phong tranh|tranh bi)\b/i.test(normalized)
+  return /\b(khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|khong dang nhap|khong goi lai|khong tham gia|khong to chuc|khong danh bac|khong ca do|khong tiep tay|dung bam|dung cung cap|canh giac|phong tranh)\b/i.test(normalized)
     || /\b(khong|dung)\b.{0,60}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la|tham gia|to chuc danh bac|danh bac|ca do|tiep tay)\b/i.test(normalized);
 }
 
+function getActionableText(normalized: string) {
+  return normalized
+    .replace(/\b(tuyet doi khong|khong|dung|khong nen|canh bao khong)\b.{0,120}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la|tham gia|to chuc danh bac|danh bac|ca do|tiep tay|cai dat ung dung la)\b/gi, " ")
+    .replace(/\b(khuyen cao|canh bao|de nghi nguoi dan|tuyet doi)\b.{0,140}\b(khong tham gia|khong lam theo|khong chuyen tien|khong cung cap|khong bam|khong nhap|bao ngay cho co quan|lien he co quan cong an)\b/gi, " ");
+}
+
 function hasRiskyActionRequest(normalized: string) {
-  const actionableText = normalized.replace(/\b(tuyet doi khong|khong|dung)\b.{0,90}\b(lam theo|bam vao|nhan vao|truy cap|dang nhap|xac minh|cung cap|gui otp|doc ma otp|chuyen tien|nap tien|dong phi|lien he so la|goi so la|tham gia|to chuc danh bac|danh bac|ca do|tiep tay)\b/gi, "");
-  const requestToSensitiveInfo = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|nhap|gui|doc|cung cap|xac minh|dang nhap)\b.{0,80}\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|thong tin ca nhan|tai khoan ngan hang|so tai khoan)\b/i.test(actionableText);
-  const requestToMoney = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|chuyen|nap|dong|thanh toan|nop)\b.{0,80}\b(tien|phi|coc|thue|ho so|van chuyen|xac minh|tai khoan ca nhan)\b/i.test(actionableText);
-  const requestToUnsafeChannel = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|lien he|goi|nhan tin|ket ban)\b.{0,80}\b(zalo|telegram|whatsapp|so dien thoai|so la|tai khoan ca nhan)\b/i.test(actionableText);
-  const requestToUnsafeLink = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|bam|nhan vao|truy cap|mo link|vao link|dang nhap|xac minh)\b.{0,80}\b(link|duong dan|website|trang web|tai khoan|nhan thuong|mo khoa|bao mat)\b/i.test(actionableText);
+  const actionableText = getActionableText(normalized);
+  const requestToSensitiveInfo = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|nhap|gui|doc|cung cap|xac minh|dang nhap|cap nhat)\b.{0,90}\b(otp|ma xac thuc|mat khau|password|pin|cccd|cmnd|can cuoc|thong tin ca nhan|tai khoan ngan hang|so tai khoan|sinh trac hoc)\b/i.test(actionableText);
+  const requestToMoney = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|chuyen|nap|dong|thanh toan|nop|dat coc|ung truoc)\b.{0,90}\b(tien|phi|coc|thue|ho so|van chuyen|xac minh|tai khoan ca nhan|rut tien|nhan tien)\b/i.test(actionableText);
+  const requestToUnsafeChannel = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|lien he|goi|nhan tin|ket ban)\b.{0,90}\b(zalo|telegram|whatsapp|so dien thoai|so la|tai khoan ca nhan)\b/i.test(actionableText);
+  const requestToUnsafeLink = /\b(vui long|hay|can|yeu cau|bat buoc|de nghi|bam|nhan vao|truy cap|mo link|vao link|dang nhap|xac minh|cap nhat|tai file|tai app)\b.{0,90}\b(link|duong dan|website|trang web|tai khoan|nhan thuong|mo khoa|bao mat|ung dung|file)\b/i.test(actionableText);
 
   return requestToSensitiveInfo || requestToMoney || requestToUnsafeChannel || requestToUnsafeLink;
 }
@@ -307,8 +314,52 @@ function isOfficialInfoHost(hostname: string) {
     || hostname === "bocongan.gov.vn"
     || hostname === "mic.gov.vn"
     || hostname === "khonggianmang.vn"
+    || hostname === "antoanthongtin.vn"
+    || hostname === "ncsc.gov.vn"
+    || hostname === "vncert.vn"
+    || hostname === "dichvucong.gov.vn"
+    || hostname === "sbv.gov.vn"
+    || hostname === "moh.gov.vn"
+    || hostname === "moet.gov.vn"
+    || hostname === "vss.gov.vn"
+    || hostname === "gdt.gov.vn"
+    || hostname === "customs.gov.vn"
     || hostname === "vtv.vn"
     || hostname === "vneconomy.vn";
+}
+
+function isTrustedInfoHost(hostname: string) {
+  const trustedHosts = new Set([
+    "google.com",
+    "drive.google.com",
+    "docs.google.com",
+    "forms.gle",
+    "youtube.com",
+    "youtu.be",
+    "microsoft.com",
+    "office.com",
+    "teams.microsoft.com",
+    "zoom.us",
+    "vietcombank.com.vn",
+    "vcbdigibank.vietcombank.com.vn",
+    "bidv.com.vn",
+    "techcombank.com",
+    "mbbank.com.vn",
+    "agribank.com.vn",
+    "viettel.vn",
+    "myviettel.vn",
+    "mobifone.vn",
+    "vinaphone.com.vn",
+    "momo.vn",
+    "zalopay.vn",
+  ]);
+
+  return isOfficialInfoHost(hostname)
+    || trustedHosts.has(hostname)
+    || hostname.endsWith(".google.com")
+    || hostname.endsWith(".youtube.com")
+    || hostname.endsWith(".microsoft.com")
+    || hostname.endsWith(".office.com");
 }
 
 function hasOnlyLowRiskWarningUrls(text: string) {
@@ -402,8 +453,45 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
   const normalized = normalizeVietnamese(text);
+  const actionableText = getActionableText(normalized);
+  const urls = extractUrlsFromText(text);
+  const getResolvedInfo = (url: string) => resolvedUrls.find((item) => item.original.toLowerCase() === url.toLowerCase());
+  const urlFacts = urls.map((url) => {
+    const resolvedInfo = getResolvedInfo(url);
+    const expandedUrl = resolvedInfo?.expanded || url;
+    const originalHost = getUrlHostname(url);
+    const expandedHost = getUrlHostname(expandedUrl);
+    const shortened = resolvedInfo?.isShortened ?? isShortenedUrl(url);
+    const resolvedShort = Boolean(shortened && resolvedInfo?.resolved && expandedUrl !== url);
+    const suspiciousDomain = /\.(cc|top|xyz|click|shop|live|site|online|vip)\b/i.test(expandedUrl);
+    const typoBrand = /vietcorn|vietcombank-login|bidv-?secure|techcombank-?verify|mbbank-?secure|momo-?gift|zalopay-?bonus/i.test(expandedUrl);
+    const trustedHost = Boolean(expandedHost && isTrustedInfoHost(expandedHost));
 
-  if (isPublicSafetyWarning(text) || isRoutineSafeNotice(text) || isCommunitySafetyNotice(text)) {
+    return {
+      original: url,
+      expanded: expandedUrl,
+      originalHost,
+      expandedHost,
+      shortened,
+      resolvedShort,
+      suspiciousDomain,
+      typoBrand,
+      trustedHost,
+    };
+  });
+
+  const onlyTrustedOrNoUrls = !urlFacts.length || urlFacts.every((item) => item.trustedHost && !item.suspiciousDomain && !item.typoBrand);
+  const hasDangerousAsk = hasRiskyActionRequest(normalized)
+    || /\b(otp|ma xac thuc|mat khau|password|pin)\b/i.test(actionableText)
+    || /\b(chuyen|nap|dong|thanh toan|nop|dat coc|ung truoc)\b.{0,90}\b(tien|phi|coc|thue|tai khoan ca nhan)\b/i.test(actionableText);
+  const looksLikeInformationalNotice = /\b(thong bao|khuyen cao|canh bao|lich|nhac lich|tai lieu|on thi|chi tiet xem tai app|xem tai ung dung|huong ung|phong chong|de nghi cong dan)\b/i.test(normalized);
+  const looksLikeTrustedSource = /\b(bo cong an|cong an|cuc an toan thong tin|co quan chuc nang|ubnd|uy ban nhan dan|nha truong|giao vien|thay|co giao|ban quan ly|to dan pho|viettel|mobifone|vinaphone|ngan hang nha nuoc)\b/i.test(normalized);
+  const safeNotice = isPublicSafetyWarning(text)
+    || isRoutineSafeNotice(text)
+    || isCommunitySafetyNotice(text)
+    || (looksLikeInformationalNotice && looksLikeTrustedSource && onlyTrustedOrNoUrls && !hasDangerousAsk);
+
+  if (safeNotice) {
     const safeUrlIndicators = getResolvedShortUrlIndicators(text, resolvedUrls);
 
     return {
@@ -429,51 +517,188 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
     score += points;
   };
 
-  const urls = extractUrlsFromText(text);
-  for (const url of urls) {
-    const resolvedInfo = resolvedUrls.find((item) => item.original.toLowerCase() === url.toLowerCase());
-    const expandedUrl = resolvedInfo?.expanded || url;
-    const expandedHost = getUrlHostname(expandedUrl);
-    const shortenedUrl = resolvedInfo?.isShortened ?? isShortenedUrl(url);
-    const resolvedShortUrl = shortenedUrl && resolvedInfo?.resolved;
-    const suspiciousDomain = /\.(cc|top|xyz|click|info|shop|live|site|online|vip|net)\b/i.test(expandedUrl);
-    const typoBank = /vietcorn|vietcombank-login|bidv-?secure|techcombank-?verify|mbbank-?secure/i.test(expandedUrl);
-    addIndicator(
-      resolvedShortUrl ? `${url} (${expandedUrl})` : url,
-      resolvedShortUrl
-        ? `Đường dẫn rút gọn dẫn tới ${expandedHost || expandedUrl}. Không cần mở nội dung bên trong; chỉ cần kiểm tra nguồn gửi và xem đường dẫn đích có hợp lý không.`
-        : shortenedUrl
-          ? "Đường dẫn rút gọn che giấu địa chỉ thật. Với tin nhắn lạ, đây là dấu hiệu cần kiểm chứng trước khi bấm."
-          : suspiciousDomain || typoBank
-            ? "Đường dẫn dùng tên miền lạ hoặc gần giống thương hiệu thật, thường gặp trong lừa đảo giả mạo."
-            : "Tin nhắn có đường dẫn ngoài. Cần tự mở kênh chính thức để kiểm chứng, không bấm trực tiếp.",
-      resolvedShortUrl ? 24 : shortenedUrl ? 28 : suspiciousDomain || typoBank ? 35 : 18,
-    );
-  }
+  const quoteFrom = (pattern: RegExp, fallback: string) => text.match(pattern)?.[0] || fallback;
 
-  const checks: Array<{ pattern: RegExp; reason: string; points: number }> = [
-    { pattern: /\b(otp|ma otp|ma xac thuc|mat khau|password|pin)\b/i, reason: "Yêu cầu mã OTP, mật khẩu hoặc mã PIN là dấu hiệu rủi ro cao. Tổ chức thật không hỏi các thông tin này qua tin nhắn.", points: 35 },
-    { pattern: /\b(cccd|cmnd|can cuoc|so tai khoan|thong tin ca nhan)\b/i, reason: "Tin nhắn nhắm tới thông tin định danh hoặc tài khoản cá nhân, có thể dùng để chiếm đoạt danh tính.", points: 25 },
-    { pattern: /\b(chuyen tien|nap tien vao|nap tien de|phi xac minh|phi ho so|phi van chuyen|dong phi|thanh toan phi|rut het tien)\b/i, reason: "Có yêu cầu chuyển tiền hoặc đóng phí trước. Đây là thủ đoạn phổ biến trong lừa đảo trực tuyến.", points: 30 },
-    { pattern: /\b(cong an|bo cong an|co quan dieu tra|vien kiem sat|toa an|bat giam|bat giu|rua tien|ma tuy|hinh su)\b/i, reason: "Nội dung giả danh cơ quan pháp luật hoặc dùng cáo buộc hình sự để gây sợ hãi.", points: 28 },
-    { pattern: /\b(ngan hang|vietcombank|bidv|techcombank|mb bank|vpbank|agribank|tai khoan bi|dang nhap la|bao mat tai khoan)\b/i, reason: "Tin nhắn giả danh ngân hàng hoặc cảnh báo tài khoản để thúc ép người nhận xác minh gấp.", points: 22 },
-    { pattern: /\b(trung thuong|trung giai|nhan qua|phan thuong|iphone|xe sh|tri an khach hang)\b/i, reason: "Nội dung trúng thưởng/quà tặng bất ngờ thường được dùng để dụ nộp phí hoặc lấy thông tin cá nhân.", points: 24 },
-    { pattern: /\b(khan cap|ngay lap tuc|truoc 24h|sau 2 gio|60 phut|het han|neu khong|se bi khoa|se bi bat)\b/i, reason: "Tin nhắn tạo áp lực thời gian hoặc đe dọa hậu quả để người nhận hành động vội.", points: 20 },
-    { pattern: /\b(telegram|zalo|whatsapp|goi ngay|lien he ngay|091|092|093|094|096|097|098|099|03\d|05\d|07\d|08\d)\b/i, reason: "Tin nhắn kéo người dùng sang kênh liên hệ cá nhân hoặc số lạ thay vì kênh chính thức.", points: 14 },
-    { pattern: /\b(khong thong bao|khong ke cho ai|bao mat tuyet doi|o mot minh|khong cup may)\b/i, reason: "Yêu cầu giữ bí mật hoặc cô lập người nhận là thủ đoạn kiểm soát tâm lý thường gặp.", points: 25 },
-    { pattern: /\b(giao hang|don hang|shipper|thieu phi|hai quan|hoan tien)\b/i, reason: "Nội dung liên quan giao hàng/phí phát sinh/hoàn tiền có thể là giả mạo đơn vị vận chuyển.", points: 16 },
-  ];
+  for (const info of urlFacts) {
+    const displayUrl = info.resolvedShort ? `${info.original} (${info.expanded})` : info.original;
+    const urlPoints = info.typoBrand || info.suspiciousDomain
+      ? 35
+      : info.shortened && !info.resolvedShort
+        ? 25
+        : info.shortened && info.resolvedShort && !info.trustedHost
+          ? 14
+          : info.shortened && info.resolvedShort && info.trustedHost
+            ? 4
+            : info.trustedHost
+              ? 0
+              : 8;
 
-  for (const check of checks) {
-    const match = normalized.match(check.pattern);
-    if (match?.[0]) {
-      const originalMatch = text.slice(match.index ?? 0, (match.index ?? 0) + match[0].length);
-      addIndicator(originalMatch, check.reason, check.points);
+    if (info.shortened || urlPoints > 0) {
+      addIndicator(
+        displayUrl,
+        info.resolvedShort
+          ? info.trustedHost
+            ? `Đường dẫn rút gọn đã được mở rộng tới ${info.expandedHost || info.expanded}. Đây chưa đủ để kết luận lừa đảo, nhưng vẫn nên kiểm tra nguồn gửi trước khi mở.`
+            : `Đường dẫn rút gọn dẫn tới ${info.expandedHost || info.expanded}. Đích đến không thuộc nhóm kênh chính thức quen thuộc nên cần kiểm chứng.`
+          : info.shortened
+            ? "ScamCheck chưa mở rộng được đường dẫn rút gọn này, có thể do mất mạng, máy chủ URL không phản hồi hoặc dịch vụ rút gọn chặn tự động kiểm tra. Khi chưa biết đích đến thật, hãy xem đây là điểm cần xác minh trước khi bấm."
+            : info.suspiciousDomain || info.typoBrand
+              ? "Đường dẫn dùng tên miền lạ hoặc gần giống thương hiệu thật, thường gặp trong lừa đảo giả mạo."
+              : "Tin nhắn có đường dẫn ngoài. Cần tự mở kênh chính thức để kiểm chứng, không bấm trực tiếp.",
+        urlPoints,
+      );
     }
   }
 
-  if (urls.length > 0 && indicators.some((item) => /otp|mat khau|password|pin|tai khoan|xac minh/i.test(normalizeVietnamese(item.quote + " " + item.reason)))) {
-    score += 18;
+  const checks: Array<{ pattern: RegExp; originalPattern: RegExp; fallback: string; reason: string; points: number }> = [
+    { pattern: /\b(otp|ma otp|ma xac thuc|mat khau|password|pin)\b/i, originalPattern: /(OTP|mã OTP|ma OTP|mã xác thực|ma xac thuc|mật khẩu|mat khau|password|PIN)/i, fallback: "OTP", reason: "Tin nhắn nhắc tới mã OTP, mật khẩu hoặc mã PIN trong phần yêu cầu hành động. Đây là thông tin tuyệt đối không được cung cấp qua tin nhắn.", points: 30 },
+    { pattern: /\b(cccd|cmnd|can cuoc|so tai khoan|thong tin ca nhan|sinh trac hoc)\b/i, originalPattern: /(CCCD|CMND|căn cước|can cuoc|số tài khoản|so tai khoan|thông tin cá nhân|thong tin ca nhan|sinh trắc học|sinh trac hoc)/i, fallback: "thông tin cá nhân", reason: "Tin nhắn nhắm tới thông tin định danh hoặc tài khoản cá nhân, chỉ an toàn khi được thực hiện qua kênh chính thức đã biết.", points: 20 },
+    { pattern: /\b(chuyen tien|nap tien vao|nap tien de|phi xac minh|phi ho so|phi van chuyen|dong phi|thanh toan phi|rut het tien|dat coc|ung truoc)\b/i, originalPattern: /(chuyển tiền|chuyen tien|nạp tiền|nap tien|phí xác minh|phi xac minh|phí hồ sơ|phi ho so|phí vận chuyển|phi van chuyen|đóng phí|dong phi|thanh toán phí|thanh toan phi|đặt cọc|dat coc|ứng trước|ung truoc)/i, fallback: "chuyển tiền", reason: "Có yêu cầu chuyển tiền, nạp tiền, đặt cọc hoặc đóng phí trước. Đây là thủ đoạn phổ biến trong lừa đảo trực tuyến.", points: 26 },
+    { pattern: /\b(vu an|co quan dieu tra|vien kiem sat|toa an|bat giam|bat giu|rua tien|trach nhiem hinh su|lenh bat|truy to|phong toa tai san)\b/i, originalPattern: /(vụ án|vu an|cơ quan điều tra|co quan dieu tra|viện kiểm sát|vien kiem sat|tòa án|toa an|bắt giam|bat giam|bắt giữ|bat giu|rửa tiền|rua tien|trách nhiệm hình sự|trach nhiem hinh su|lệnh bắt|lenh bat|truy tố|truy to|phong tỏa tài sản|phong toa tai san)/i, fallback: "vụ án", reason: "Tin nhắn dùng cáo buộc pháp lý/hình sự để gây sợ hãi. Đây chỉ là rủi ro cao khi đi kèm yêu cầu gọi số lạ, chuyển tiền hoặc cung cấp thông tin.", points: 20 },
+    { pattern: /\b(tai khoan bi khoa|dang nhap la|bao mat tai khoan|xac minh tai khoan|mo khoa tai khoan|cap nhat sinh trac hoc)\b/i, originalPattern: /(tài khoản bị khóa|tai khoan bi khoa|đăng nhập lạ|dang nhap la|bảo mật tài khoản|bao mat tai khoan|xác minh tài khoản|xac minh tai khoan|mở khóa tài khoản|mo khoa tai khoan|cập nhật sinh trắc học|cap nhat sinh trac hoc)/i, fallback: "xác minh tài khoản", reason: "Tin nhắn nói về cảnh báo tài khoản hoặc yêu cầu xác minh. Đây chỉ đáng ngờ khi đi kèm đường dẫn/kênh không chính thức hoặc yêu cầu thông tin nhạy cảm.", points: 10 },
+    { pattern: /\b(trung thuong|trung giai|nhan qua|phan thuong|iphone|xe sh|tri an khach hang)\b/i, originalPattern: /(trúng thưởng|trung thuong|trúng giải|trung giai|nhận quà|nhan qua|phần thưởng|phan thuong|iPhone|xe SH|tri ân khách hàng|tri an khach hang)/i, fallback: "trúng thưởng", reason: "Nội dung trúng thưởng/quà tặng bất ngờ thường được dùng để dụ nộp phí hoặc lấy thông tin cá nhân.", points: 20 },
+    { pattern: /\b(khan cap|ngay lap tuc|truoc 24h|sau 2 gio|60 phut|het han|se bi khoa|se bi bat)\b/i, originalPattern: /(khẩn cấp|khan cap|ngay lập tức|ngay lap tuc|trước 24h|truoc 24h|sau 2 giờ|sau 2 gio|60 phút|60 phut|hết hạn|het han|sẽ bị khóa|se bi khoa|sẽ bị bắt|se bi bat)/i, fallback: "khẩn cấp", reason: "Tin nhắn tạo áp lực thời gian hoặc đe dọa hậu quả để người nhận hành động vội.", points: 12 },
+    { pattern: /\b(telegram|zalo|whatsapp|goi ngay|lien he ngay|ket ban|nhan tin rieng|tai khoan ca nhan)\b/i, originalPattern: /(Telegram|Zalo|WhatsApp|gọi ngay|goi ngay|liên hệ ngay|lien he ngay|kết bạn|ket ban|nhắn tin riêng|nhan tin rieng|tài khoản cá nhân|tai khoan ca nhan)/i, fallback: "liên hệ ngay", reason: "Tin nhắn kéo người dùng sang kênh liên hệ cá nhân thay vì kênh chính thức.", points: 10 },
+    { pattern: /\b(khong thong bao|khong ke cho ai|bao mat tuyet doi|o mot minh|khong cup may)\b/i, originalPattern: /(không thông báo|khong thong bao|không kể cho ai|khong ke cho ai|bảo mật tuyệt đối|bao mat tuyet doi|ở một mình|o mot minh|không cúp máy|khong cup may)/i, fallback: "bảo mật tuyệt đối", reason: "Yêu cầu giữ bí mật hoặc cô lập người nhận là thủ đoạn kiểm soát tâm lý thường gặp.", points: 24 },
+    { pattern: /\b(giao hang|don hang|shipper|thieu phi|hai quan|hoan tien|cod|buu pham)\b/i, originalPattern: /(giao hàng|giao hang|đơn hàng|don hang|shipper|thiếu phí|thieu phi|hải quan|hai quan|hoàn tiền|hoan tien|COD|bưu phẩm|buu pham)/i, fallback: "giao hàng", reason: "Nội dung liên quan giao hàng/phí phát sinh/hoàn tiền có thể là giả mạo đơn vị vận chuyển.", points: 10 },
+  ];
+
+  for (const check of checks) {
+    const match = actionableText.match(check.pattern);
+    if (match?.[0]) {
+      addIndicator(quoteFrom(check.originalPattern, check.fallback), check.reason, check.points);
+    }
+  }
+
+  const hasShortLink = urlFacts.some((item) => item.shortened);
+  const hasUnresolvedShortLink = urlFacts.some((item) => item.shortened && !item.resolvedShort);
+  const hasUntrustedLink = urlFacts.some((item) => !item.trustedHost || item.suspiciousDomain || item.typoBrand);
+  const hasRiskyLink = urlFacts.some((item) => item.suspiciousDomain || item.typoBrand || (!item.trustedHost && !item.resolvedShort));
+  const hasAnyRiskyOrHiddenLink = hasUntrustedLink || hasShortLink;
+  const hasBankBrand = /\b(ngan hang|vietcombank|bidv|techcombank|mb bank|mbbank|vpbank|agribank|acb|sacombank|tpbank|vp bank|momo|zalopay)\b/i.test(normalized);
+  const hasBankSecurityContext = /\b(tai khoan|the|internet banking|dang nhap|bao mat|xac minh|mo khoa|khoa|sinh trac hoc|otp|mat khau|pin|cccd|can cuoc|giao dich)\b/i.test(normalized);
+  const hasSensitiveCredentialRequest = /\b(nhap|gui|doc|cung cap|xac minh|dang nhap|cap nhat)\b.{0,90}\b(otp|ma xac thuc|mat khau|password|pin|cccd|can cuoc|so tai khoan|thong tin ca nhan|sinh trac hoc)\b/i.test(actionableText);
+  const asksMoneyOrFee = /\b(chuyen|nap|dong|thanh toan|nop|dat coc|ung truoc|rut)\b.{0,90}\b(tien|phi|coc|thue|ho so|van chuyen|tai khoan ca nhan|hoa hong)\b/i.test(actionableText);
+  const hasBankThreat = /\b(se bi khoa|khoa tai khoan|tam khoa|phong toa|huy dich vu|ngung dich vu|khoa the)\b/i.test(actionableText);
+  const asksToOpenOrLogin = /\b(bam|nhan vao|truy cap|mo link|vao link|dang nhap|xac minh|cap nhat|tai file|tai app|tai ve)\b/i.test(actionableText);
+  const requiresDepositOrTopup = /\b(nap|chuyen|dat coc|ung truoc|dong)\b.{0,40}\b(\d{2,}|k|nghin|trieu|tien|phi|coc)\b/i.test(actionableText);
+  const hasConditionalThreat = /\b(neu khong|neu ban khong)\b.{0,100}\b(se bi khoa|bi khoa|khoa|phat|bat|huy|tam ngung|phong toa|mat quyen|xu ly|truy to)\b/i.test(actionableText);
+  const hasPrivateContactChannel = /\b(goi ngay|lien he ngay|nhan tin ngay|ket ban|zalo|telegram|whatsapp|tai khoan ca nhan|0\d{9,10})\b/i.test(actionableText);
+
+  if (hasBankBrand && hasBankSecurityContext && (hasAnyRiskyOrHiddenLink || hasSensitiveCredentialRequest || hasBankThreat)) {
+    addIndicator(
+      quoteFrom(/(Vietcombank|BIDV|Techcombank|MB Bank|MBBank|VPBank|Agribank|Momo|ZaloPay|ngân hàng|ngan hang|tài khoản|tai khoan|xác minh|xac minh|sinh trắc học|sinh trac hoc)/i, "ngân hàng"),
+      "Tên ngân hàng hoặc ví điện tử chỉ trở thành dấu hiệu rủi ro khi đi kèm yêu cầu xác minh, khóa tài khoản, thông tin nhạy cảm hoặc đường dẫn/kênh không chính thức.",
+      hasSensitiveCredentialRequest || hasRiskyLink ? 22 : 12,
+    );
+  }
+
+  if (hasSensitiveCredentialRequest && (hasAnyRiskyOrHiddenLink || hasPrivateContactChannel || hasBankBrand)) {
+    addIndicator(
+      quoteFrom(/(OTP|mã xác thực|ma xac thuc|mật khẩu|mat khau|PIN|CCCD|căn cước|can cuoc|thông tin cá nhân|thong tin ca nhan)/i, "thông tin nhạy cảm"),
+      "Tin nhắn vừa yêu cầu thông tin nhạy cảm vừa dùng link/kênh không chính thức. Đây là tổ hợp rủi ro cao.",
+      22,
+    );
+  }
+
+  if (hasConditionalThreat && (hasAnyRiskyOrHiddenLink || hasSensitiveCredentialRequest || hasPrivateContactChannel || asksMoneyOrFee)) {
+    addIndicator(
+      quoteFrom(/(nếu không|neu khong|nếu bạn không|neu ban khong).{0,90}/i, "nếu không"),
+      "Cụm điều kiện kiểu 'nếu không...' đáng ngờ khi đi kèm link/kênh không chính thức, số lạ, yêu cầu tiền hoặc thông tin nhạy cảm.",
+      14,
+    );
+  }
+
+  const hasLegalAuthorityImpersonation = /\b(cong an|bo cong an|co quan dieu tra|vien kiem sat|toa an|canh sat)\b/i.test(normalized);
+  const hasCriminalAccusation = /\b(vu an|rua tien|ma tuy|hinh su|bat giam|bat giu|trach nhiem hinh su|lenh bat|truy to|phong toa tai san)\b/i.test(actionableText);
+  const asksPrivateUrgentContact = /\b(goi ngay|lien he ngay|nhan tin ngay)\b.{0,50}\b(0\d{9,10}|zalo|telegram|whatsapp)\b/i.test(actionableText)
+    || /\b(0\d{9,10})\b/i.test(actionableText);
+  const threatensArrestOrPenalty = /\b(tranh bi bat|se bi bat|bi bat giu|bat giam|truy to|chiu trach nhiem hinh su|phong toa tai san|xu ly hinh su|nop phat)\b/i.test(actionableText);
+
+  const hasDirectLegalPhoneTrap = /\b(cong an|bo cong an|co quan dieu tra|canh sat)\b/i.test(normalized)
+    && /\b(vu an|rua tien|ma tuy|hinh su|bat giam|bat giu|trach nhiem hinh su|truy to)\b/i.test(normalized)
+    && /\b(goi ngay|lien he ngay|0\d{9,10}|zalo|telegram)\b/i.test(normalized);
+
+  if (hasLegalAuthorityImpersonation && hasCriminalAccusation && (asksPrivateUrgentContact || asksMoneyOrFee || threatensArrestOrPenalty || hasDirectLegalPhoneTrap)) {
+    addIndicator(
+      quoteFrom(/(vụ án|vu an|rửa tiền|rua tien|bắt giữ|bat giu|trách nhiệm hình sự|trach nhiem hinh su|0\d{9,10}|nộp phạt|nop phat)/i, "cơ quan pháp luật"),
+      "Tổ hợp giả danh cơ quan pháp luật, cáo buộc hình sự và yêu cầu hành động qua số/kênh lạ là kịch bản lừa đảo phổ biến, rủi ro cao.",
+      hasDirectLegalPhoneTrap ? 36 : 26,
+    );
+  }
+
+  if (hasLegalAuthorityImpersonation && threatensArrestOrPenalty && !hasProtectiveInstruction(normalized)) {
+    addIndicator(
+      quoteFrom(/(tránh bị bắt|tranh bi bat|sẽ bị bắt|se bi bat|bắt giữ|bat giu|bắt giam|bat giam|trách nhiệm hình sự|trach nhiem hinh su|nộp phạt|nop phat)/i, "tránh bị bắt"),
+      "Tin nhắn dùng đe dọa bắt giữ, xử lý hình sự hoặc nộp phạt để tạo sợ hãi và ép người nhận làm theo ngay.",
+      16,
+    );
+  }
+
+  const hasPrizeOrReward = /\b(trung thuong|trung giai|nhan qua|phan thuong|tri an|qua tang|voucher|mien phi|iphone|xe sh)\b/i.test(normalized);
+  if (hasPrizeOrReward && (asksMoneyOrFee || hasSensitiveCredentialRequest || hasAnyRiskyOrHiddenLink)) {
+    addIndicator(
+      quoteFrom(/(trúng thưởng|trung thuong|nhận quà|nhan qua|phần thưởng|phan thuong|tri ân|tri an|voucher|iPhone|xe SH)/i, "phần thưởng"),
+      "Quà tặng/trúng thưởng trở nên rủi ro cao khi yêu cầu phí, thông tin cá nhân hoặc dẫn tới link/kênh không chính thức.",
+      22,
+    );
+  }
+
+  const hasDeliveryContext = /\b(giao hang|don hang|shipper|buu pham|hai quan|cod|hoan tien|phi van chuyen|kien hang)\b/i.test(normalized);
+  if (hasDeliveryContext && (asksMoneyOrFee || hasAnyRiskyOrHiddenLink || hasSensitiveCredentialRequest)) {
+    addIndicator(
+      quoteFrom(/(giao hàng|giao hang|đơn hàng|don hang|bưu phẩm|buu pham|hải quan|hai quan|COD|hoàn tiền|hoan tien|phí vận chuyển|phi van chuyen)/i, "đơn hàng"),
+      "Thông báo giao hàng/hoàn tiền có rủi ro khi yêu cầu đóng phí, nhập thông tin hoặc mở link không chính thức.",
+      16,
+    );
+  }
+
+  const hasJobTaskInvestment = /\b(viec nhe luong cao|cong tac vien|nhiem vu|hoa hong|dau tu|loi nhuan|crypto|tien ao|san giao dich|nap de rut|lam viec online)\b/i.test(normalized);
+  if (hasJobTaskInvestment && (asksMoneyOrFee || requiresDepositOrTopup || hasPrivateContactChannel || /\b(telegram|zalo|whatsapp|nhom kin)\b/i.test(normalized))) {
+    addIndicator(
+      quoteFrom(/(việc nhẹ lương cao|viec nhe luong cao|cộng tác viên|cong tac vien|nhiệm vụ|nhiem vu|hoa hồng|hoa hong|đầu tư|dau tu|lợi nhuận|loi nhuan|Telegram|Zalo)/i, "việc nhẹ lương cao"),
+      "Việc nhẹ lương cao, nhiệm vụ nhận hoa hồng hoặc đầu tư online thường là lừa đảo khi yêu cầu nạp tiền hoặc kéo sang nhóm riêng.",
+      requiresDepositOrTopup || asksMoneyOrFee ? 46 : 24,
+    );
+  }
+
+  const hasFamilyOrRomanceEmergency = /\b(nguoi than|con dang|me dang|bo dang|cap cuu|tai nan|nam vien|nguoi yeu|ban trai|ban gai|ket hon|qua hai quan)\b/i.test(normalized);
+  if (hasFamilyOrRomanceEmergency && (asksMoneyOrFee || hasPrivateContactChannel)) {
+    addIndicator(
+      quoteFrom(/(người thân|nguoi than|cấp cứu|cap cuu|tai nạn|tai nan|nằm viện|nam vien|người yêu|nguoi yeu|hải quan|hai quan)/i, "người thân"),
+      "Tin nhắn lợi dụng tình cảm hoặc tình huống khẩn cấp để yêu cầu tiền/kênh liên hệ riêng là dấu hiệu rủi ro cao.",
+      22,
+    );
+  }
+
+  const hasEmailContext = /\b(from:|subject:|reply-to|dear|kinh gui|thu dien tu|email|hoa don|invoice|bien lai|dinh kem|attachment|file|tai lieu)\b/i.test(normalized);
+  const hasAttachmentRisk = /\.(exe|apk|bat|cmd|scr|js|vbs|zip|rar|7z|docm|xlsm)\b/i.test(text) || /\b(file dinh kem|tep dinh kem|attachment|tai file|tai ve)\b/i.test(actionableText);
+  if (hasEmailContext && hasAttachmentRisk && (asksToOpenOrLogin || asksMoneyOrFee || hasRiskyLink)) {
+    addIndicator(
+      quoteFrom(/(file đính kèm|file dinh kem|tệp đính kèm|tep dinh kem|attachment|\.exe|\.apk|\.zip|\.rar|\.docm|\.xlsm)/i, "file đính kèm"),
+      "Email có tệp/link cần mở tải xuống là rủi ro, đặc biệt khi đi kèm hóa đơn, thanh toán hoặc yêu cầu đăng nhập.",
+      20,
+    );
+  }
+
+  if (hasEmailContext && hasAnyRiskyOrHiddenLink && (hasSensitiveCredentialRequest || asksToOpenOrLogin)) {
+    addIndicator(
+      quoteFrom(/(đăng nhập|dang nhap|xác minh|xac minh|cập nhật|cap nhat|hóa đơn|hoa don|invoice|link|đường dẫn|duong dan)/i, "xác minh"),
+      "Email yêu cầu đăng nhập/xác minh qua link lạ hoặc link rút gọn có nguy cơ là phishing.",
+      18,
+    );
+  }
+
+  if (hasUnresolvedShortLink && (asksToOpenOrLogin || hasPrizeOrReward || hasBankSecurityContext || hasDeliveryContext)) {
+    score += 8;
+  }
+
+  if (urls.length > 0 && indicators.some((item) => /otp|mat khau|password|pin|tai khoan|xac minh|cccd|can cuoc/i.test(normalizeVietnamese(item.quote + " " + item.reason)))) {
+    score += 14;
+  }
+
+  if (hasProtectiveInstruction(normalized) && looksLikeTrustedSource && !hasDangerousAsk && !hasRiskyLink) {
+    score = Math.max(0, score - 24);
   }
 
   const risk: Exclude<Risk, null> = score >= 55 ? "high" : score >= 25 ? "medium" : "low";
@@ -498,8 +723,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
       advice: getFallbackPsychology(risk),
     },
   };
-}
-function highlightText(text: string, highlights: string[], risk?: Risk) {
+}function highlightText(text: string, highlights: string[], risk?: Risk) {
   if (!highlights.length) return <span>{text}</span>;
 
   const escaped = highlights.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -818,7 +1042,19 @@ export default function App() {
     try { localStorage.setItem("scamcheck-history", JSON.stringify(history)); } catch {}
   }, [history]);
 
+  function getLocalUrlFallbacks(text: string): UrlAnalysis[] {
+    return extractUrlsFromText(text).map((url) => ({
+      original: url,
+      expanded: url,
+      isShortened: isShortenedUrl(url),
+      resolved: false,
+    }));
+  }
+
   async function resolveUrlsForFallback(text: string): Promise<UrlAnalysis[]> {
+    const localUrls = getLocalUrlFallbacks(text);
+    if (!localUrls.length) return [];
+
     try {
       const response = await fetch("/api/urls", {
         method: "POST",
@@ -828,10 +1064,24 @@ export default function App() {
         body: JSON.stringify({ message: text }),
       });
 
+      if (!response.ok) return localUrls;
+
       const data = await response.json().catch(() => null);
-      return Array.isArray(data?.urls) ? data.urls : [];
+      const remoteUrls: UrlAnalysis[] = Array.isArray(data?.urls) ? data.urls : [];
+      if (!remoteUrls.length) return localUrls;
+
+      const remoteByOriginal = new Map(remoteUrls.map((item) => [item.original.toLowerCase(), item]));
+      const mergedUrls = localUrls.map((item) => remoteByOriginal.get(item.original.toLowerCase()) || item);
+
+      for (const remoteUrl of remoteUrls) {
+        if (!mergedUrls.some((item) => item.original.toLowerCase() === remoteUrl.original.toLowerCase())) {
+          mergedUrls.push(remoteUrl);
+        }
+      }
+
+      return mergedUrls;
     } catch {
-      return [];
+      return localUrls;
     }
   }
   async function analyzeWithAI(text: string): Promise<Analysis> {
@@ -1340,7 +1590,7 @@ export default function App() {
               <div className="text-center py-12 text-gray-600 dark:text-gray-300">
                 <div className="text-4xl mb-3">📭</div>
                 <p className="text-sm">Chưa có lịch sử kiểm tra nào.</p>
-                <p className="text-xs mt-1">Hãy nhập một tin nhắn nghi ngờ để bắt đầu!</p>
+                <p className="text-xs mt-1">Hãy nhập một tin nhắn để bắt đầu!</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -1414,7 +1664,7 @@ export default function App() {
               <div className="p-5 space-y-4">
                 {item.usedFallback && (
                   <div className="rounded-xl border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200 leading-relaxed">
-                    Lần kiểm tra này sử dụng bộ phân tích dự phòng vì ScamCheck không kết nối được tới máy chủ AI.
+                    ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.
                   </div>
                 )}
 
@@ -1436,7 +1686,7 @@ export default function App() {
                     <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">{itemDetectiveText}</p>
                     {item.highlights.length > 0 && (
                       <div className="space-y-2">
-                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu nghi ngờ</p>
+                        <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Điểm đánh dấu</p>
                         <div className="space-y-2">
                           {mergeRelatedIndicators(item.indicators?.length
                             ? item.indicators
@@ -1489,45 +1739,15 @@ export default function App() {
           <ExposeTab openFolder={openFolder} setOpenFolder={setOpenFolder} />
         )}
 
-        <p className="text-center text-xs text-gray-400 dark:text-gray-300">
-          ScamCheck · Bảo vệ bạn khỏi lừa đảo trực tuyến
-        </p>
-
         {/* Legal notice */}
         <div className="rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 px-5 py-4 text-xs text-blue-800 dark:text-blue-300 leading-relaxed text-center">
-          <span className="font-bold">Lưu ý pháp lý:</span> ScamCheck là công cụ giáo dục do nhóm học viên phát triển và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
-        </div>
+          <span className="font-bold">Lưu ý pháp lý:</span> ScamCheck là công cụ giáo dục do nhóm học viên FCT Club phát triển. Đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
+		</div>
+		
+		<p className="text-center text-xs text-gray-400 dark:text-gray-300">
+          ScamCheck · Bảo vệ bạn khỏi lừa đảo trực tuyến
+        </p>
       </div>
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
