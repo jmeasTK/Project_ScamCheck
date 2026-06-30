@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Sun, Moon, WifiOff } from "lucide-react";
+import { Sun, Moon, WifiOff, ShieldAlert } from "lucide-react";
 import { Toaster, toast } from "sonner";
 
 // Official hotline database
@@ -161,6 +161,12 @@ type Indicator = {
   reason: string;
 };
 
+type PromptInjectionWarning = {
+  detected: boolean;
+  quote?: string;
+  reason?: string;
+};
+
 type UrlAnalysis = {
   original: string;
   expanded: string;
@@ -181,6 +187,7 @@ interface Analysis {
     advice?: string;
   } | null;
   usedFallback?: boolean;
+  promptInjection?: PromptInjectionWarning | null;
 }
 
 function getIndicatorBaseQuote(quote: string) {
@@ -189,6 +196,31 @@ function getIndicatorBaseQuote(quote: string) {
     ?.replace(/\s+\(https?:\/\/.*\)\s*$/i, "")
     .trim()
     .toLowerCase() || quote.trim().toLowerCase();
+}
+
+function detectPromptInjection(text: string): PromptInjectionWarning | null {
+  const patterns = [
+    /(?:ignore|disregard|forget|bypass|override)[^\n.]{0,120}(?:previous|above|prior|system|developer|instructions?|rules?|prompt)/i,
+    /(?:do not|don't|never)[^\n.]{0,80}(?:return|output|respond)[^\n.]{0,40}(?:json|JSON)/i,
+    /(?:return|output|respond)[^\n.]{0,80}(?:only|just)[^\n.]{0,80}(?:safe|not suspicious|no risk|json|JSON)/i,
+    /(?:you are now|act as|pretend to be|developer mode|jailbreak|system prompt)/i,
+    /(?:bỏ qua|bo qua|phớt lờ|phot lo|quên|quen|ghi đè|ghi de|vượt qua|vuot qua)[^\n.]{0,120}(?:hướng dẫn|huong dan|lệnh|lenh|quy tắc|quy tac|prompt|system|hệ thống|he thong|trước đó|truoc do)/i,
+    /(?:không|khong|đừng|dung)[^\n.]{0,80}(?:trả về|tra ve|xuất|xuat)[^\n.]{0,40}(?:json|JSON)/i,
+    /(?:chỉ|chi)[^\n.]{0,60}(?:trả về|tra ve|nói|noi)[^\n.]{0,80}(?:an toàn|an toan|không đáng ngờ|khong dang ngo|không có rủi ro|khong co rui ro)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const quote = text.match(pattern)?.[0]?.trim();
+    if (quote) {
+      return {
+        detected: true,
+        quote: quote.slice(0, 180),
+        reason: "Tin nhắn có câu chữ giống yêu cầu điều khiển AI hoặc thay đổi cách ScamCheck trả lời. ScamCheck đã bỏ qua phần này khi phân tích.",
+      };
+    }
+  }
+
+  return null;
 }
 
 function mergeRelatedIndicators(indicators: Indicator[]) {
@@ -452,6 +484,7 @@ function getResolvedShortUrlIndicators(text: string, resolvedUrls: UrlAnalysis[]
 function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
+  const promptInjection = detectPromptInjection(text);
   const normalized = normalizeVietnamese(text);
   const actionableText = getActionableText(normalized);
   const urls = extractUrlsFromText(text);
@@ -503,6 +536,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
       actions: [],
       usedFallback: true,
       psychology: null,
+      promptInjection,
     };
   }
 
@@ -718,6 +752,7 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
         : "Bộ phân tích dự phòng chưa thấy dấu hiệu lừa đảo rõ ràng, nhưng bạn vẫn nên cẩn thận với mọi yêu cầu cung cấp thông tin cá nhân.",
     actions: getFallbackActions(risk),
     usedFallback: true,
+    promptInjection,
     psychology: risk === "low" ? null : {
       manipulation: risk === "high" ? "Tin nhắn có thể đang tạo sợ hãi hoặc áp lực gấp." : "Tin nhắn có thể khiến người nhận phân vân và mất cảnh giác.",
       advice: getFallbackPsychology(risk),
@@ -785,6 +820,36 @@ const riskConfig = {
   },
 };
 
+function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning | null }) {
+  if (!warning?.detected) return null;
+
+  return (
+    <div className="rounded-2xl border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-200">
+          <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+        </div>
+        <div className="min-w-0 space-y-2">
+          <div>
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Cảnh báo điều khiển AI</p>
+            <p className="text-sm text-amber-900/80 dark:text-amber-100/80 leading-relaxed">
+              Tin nhắn có phần giống yêu cầu thao túng cách ScamCheck trả lời. Phần này đã được tách riêng và không được xem là lệnh thật.
+            </p>
+          </div>
+          {warning.quote && (
+            <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-white/70 dark:bg-gray-900/50 px-3 py-2">
+              <p className="text-xs font-mono text-amber-800 dark:text-amber-200 break-words">{warning.quote}</p>
+              {warning.reason && (
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type HistoryItem = {
   id: string;
   text: string;
@@ -799,6 +864,7 @@ type HistoryItem = {
     advice?: string;
   } | null;
   usedFallback?: boolean;
+  promptInjection?: PromptInjectionWarning | null;
   time: Date;
 };
 
@@ -1140,6 +1206,13 @@ export default function App() {
     };
 
     const risk = riskMap[data.risk] ?? "medium";
+    const promptInjection = data.promptInjection && typeof data.promptInjection === "object" && data.promptInjection.detected
+      ? {
+          detected: true,
+          quote: typeof data.promptInjection.quote === "string" ? data.promptInjection.quote : undefined,
+          reason: typeof data.promptInjection.reason === "string" ? data.promptInjection.reason : undefined,
+        }
+      : detectPromptInjection(text);
     const aiIndicators = Array.isArray(data.indicators)
       ? mergeRelatedIndicators(
           data.indicators
@@ -1163,6 +1236,7 @@ export default function App() {
         ? data.actions.filter((action: unknown): action is string => typeof action === "string" && Boolean(action.trim()))
         : getFallbackActions(risk),
       usedFallback: false,
+      promptInjection,
       psychology: data.psychology && typeof data.psychology === "object"
         ? {
             manipulation: typeof data.psychology.manipulation === "string" ? data.psychology.manipulation : undefined,
@@ -1195,6 +1269,7 @@ export default function App() {
             detective: result.detective,
             actions: result.actions,
             psychology: result.psychology,
+            promptInjection: result.promptInjection,
             usedFallback: result.usedFallback,
             time: new Date(),
           },
@@ -1232,6 +1307,7 @@ export default function App() {
             detective: fallbackResult.detective,
             actions: fallbackResult.actions,
             psychology: fallbackResult.psychology,
+            promptInjection: fallbackResult.promptInjection,
             usedFallback: true,
             time: new Date(),
           },
@@ -1420,6 +1496,7 @@ export default function App() {
                     Không kết nối được tới máy chủ AI, ScamCheck sẽ sử dụng bộ phân tích dự phòng.
                   </div>
                 )}
+                <PromptInjectionBanner warning={analysis.promptInjection} />
                 <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
                   <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
                     <p className={`text-xs font-bold uppercase tracking-widest ${cfg.text} mb-0.5`}>
@@ -1667,6 +1744,8 @@ export default function App() {
                     ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.
                   </div>
                 )}
+
+                <PromptInjectionBanner warning={item.promptInjection} />
 
                 {/* Original message */}
                 <div className="space-y-1.5">
