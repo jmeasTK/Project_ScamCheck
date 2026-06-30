@@ -848,7 +848,7 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
           <div>
             <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Cảnh báo điều khiển AI</p>
             <p className="text-sm text-amber-900/80 dark:text-amber-100/80 leading-relaxed">
-              Tin nhắn có phần giống yêu cầu thao túng cách ScamCheck trả lời. Phần này đã được tách riêng và không được xem là lệnh thật.
+              Tin nhắn này có vẻ đang yêu cầu thao túng cách ScamCheck trả lời. Phần này đã được tách riêng và không được xem là lệnh thật.
             </p>
           </div>
           {warning.quote && (
