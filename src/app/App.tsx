@@ -223,6 +223,21 @@ function detectPromptInjection(text: string): PromptInjectionWarning | null {
   return null;
 }
 
+function isPromptInjectionIndicator(indicator: Indicator, warning?: PromptInjectionWarning | null) {
+  const quote = indicator.quote.trim();
+  const text = `${indicator.quote} ${indicator.reason}`;
+  const warningQuote = warning?.quote?.trim().toLowerCase();
+
+  if (warningQuote && quote.toLowerCase() === warningQuote) return true;
+
+  return [
+    /(?:developer|admin|system prompt|prompt|instruction|hÆ°á»›ng dáº«n|huong dan|quy táº¯c|quy tac)[^\n.]{0,120}(?:given|project|ignore|bá» qua|bo qua|lá»‡nh|lenh|rule|whole prompt|toÃ n bá»™ prompt|toan bo prompt)/i,
+    /(?:json|output|detective|risk)[^\n.]{0,120}(?:date|time|high|safe|an toÃ n|an toan|change|say|tráº£ vá»|tra ve)/i,
+    /(?:change|set|modify|alter)[^\n.]{0,80}(?:risk|json|output|answer|response)/i,
+    /(?:try to|if you see this|if you are required)[^\n.]{0,120}(?:say|answer|change|output|json)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
 function mergeRelatedIndicators(indicators: Indicator[]) {
   const merged = new Map<string, Indicator>();
 
@@ -1213,7 +1228,7 @@ export default function App() {
           reason: typeof data.promptInjection.reason === "string" ? data.promptInjection.reason : undefined,
         }
       : detectPromptInjection(text);
-    const aiIndicators = Array.isArray(data.indicators)
+    const rawAiIndicators = Array.isArray(data.indicators)
       ? mergeRelatedIndicators(
           data.indicators
             .filter((item: { quote?: string; reason?: string }) => Boolean(item.quote))
@@ -1223,6 +1238,10 @@ export default function App() {
             })),
         )
       : [];
+    const aiIndicators = promptInjection?.detected
+      ? rawAiIndicators.filter((indicator) => !isPromptInjectionIndicator(indicator, promptInjection))
+      : rawAiIndicators;
+    const promptInjectionOnly = Boolean(promptInjection?.detected && aiIndicators.length === 0);
 
     return {
       risk,
@@ -1232,12 +1251,16 @@ export default function App() {
       detective: typeof data.detective === "string" && data.detective.trim()
         ? data.detective.trim()
         : getFallbackDetective(risk),
-      actions: Array.isArray(data.actions)
+      actions: promptInjectionOnly
+        ? []
+        : Array.isArray(data.actions)
         ? data.actions.filter((action: unknown): action is string => typeof action === "string" && Boolean(action.trim()))
         : getFallbackActions(risk),
       usedFallback: false,
       promptInjection,
-      psychology: data.psychology && typeof data.psychology === "object"
+      psychology: promptInjectionOnly
+        ? null
+        : data.psychology && typeof data.psychology === "object"
         ? {
             manipulation: typeof data.psychology.manipulation === "string" ? data.psychology.manipulation : undefined,
             advice: typeof data.psychology.advice === "string" ? data.psychology.advice : undefined,
