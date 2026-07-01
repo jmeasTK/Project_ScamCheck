@@ -467,6 +467,9 @@ function withPromptInjectionSafeguard<T extends ReturnType<typeof normalizeAnaly
   return {
     ...analysis,
     indicators,
+    detective: promptInjectionOnly
+      ? "Tin nhắn này chủ yếu cố điều khiển cách ScamCheck/Gemini trả lời. ScamCheck đã bỏ qua phần thao túng AI và không xem đó là lệnh thật."
+      : analysis.detective,
     actions: promptInjectionOnly ? [] : analysis.actions,
     psychology: promptInjectionOnly ? null : analysis.psychology,
     promptInjection: {

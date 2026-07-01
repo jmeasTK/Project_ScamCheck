@@ -1257,7 +1257,9 @@ export default function App() {
       label: data.risk ?? "Nghi ngờ",
       highlights: getIndicatorQuotes(aiIndicators),
       indicators: aiIndicators,
-      detective: typeof data.detective === "string" && cleanPersonaIntro(data.detective)
+      detective: promptInjectionOnly
+        ? "Tin nhắn này chủ yếu cố điều khiển cách ScamCheck/Gemini trả lời. ScamCheck đã bỏ qua phần thao túng AI và không xem đó là lệnh thật."
+        : typeof data.detective === "string" && cleanPersonaIntro(data.detective)
         ? cleanPersonaIntro(data.detective)
         : getFallbackDetective(risk),
       actions: promptInjectionOnly
