@@ -190,6 +190,14 @@ interface Analysis {
   promptInjection?: PromptInjectionWarning | null;
 }
 
+function cleanPersonaIntro(value: string) {
+  return value
+    .trim()
+    .replace(/^(?:xin\s+chào|chào\s+(?:bạn|anh|chị|cô|chú|ông|bà)?|kính\s+chào)[,!.:\s-]*/i, "")
+    .replace(/^(?:tôi\s+là\s+(?:thám\s+tử|cô\s+tâm\s+lý)[^.!?:,]*[,!.:\s-]*)/i, "")
+    .trim();
+}
+
 function getIndicatorBaseQuote(quote: string) {
   return quote
     .split("->")[0]
@@ -839,23 +847,25 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
   if (!warning?.detected) return null;
 
   return (
-    <div className="rounded-2xl border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 shadow-sm">
+    <div className="rounded-2xl border-2 border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-950/50 px-4 py-4 shadow-lg ring-2 ring-orange-200/70 dark:ring-orange-900/50">
       <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-200">
-          <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-600 text-white shadow-sm">
+          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
         </div>
-        <div className="min-w-0 space-y-2">
-          <div>
-            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Cảnh báo điều khiển AI</p>
-            <p className="text-sm text-amber-900/80 dark:text-amber-100/80 leading-relaxed">
-              Tin nhắn này có vẻ đang yêu cầu thao túng cách ScamCheck trả lời. Phần này đã được tách riêng và không được xem là lệnh thật.
+        <div className="min-w-0 space-y-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện tin nhắn đang cố thao túng AI</p>
+            </div>
+            <p className="text-sm font-medium text-orange-950/90 dark:text-orange-100/90 leading-relaxed">
+              Một đoạn tin nhắn trên đang cố ra lệnh cho ScamCheck/Gemini thay đổi cách trả lời. ScamCheck đã tách riêng và bỏ qua đoạn tin nhắn này.
             </p>
           </div>
           {warning.quote && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-white/70 dark:bg-gray-900/50 px-3 py-2">
-              <p className="text-xs font-mono text-amber-800 dark:text-amber-200 break-words">{warning.quote}</p>
+            <div className="rounded-xl border border-orange-300 dark:border-orange-700 bg-white/85 dark:bg-gray-950/60 px-3 py-2.5">
+              <p className="text-xs font-mono font-semibold text-orange-900 dark:text-orange-100 break-words">{warning.quote}</p>
               {warning.reason && (
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
+                <p className="mt-1.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
               )}
             </div>
           )}
@@ -864,7 +874,6 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
     </div>
   );
 }
-
 type HistoryItem = {
   id: string;
   text: string;
@@ -1248,8 +1257,8 @@ export default function App() {
       label: data.risk ?? "Nghi ngờ",
       highlights: getIndicatorQuotes(aiIndicators),
       indicators: aiIndicators,
-      detective: typeof data.detective === "string" && data.detective.trim()
-        ? data.detective.trim()
+      detective: typeof data.detective === "string" && cleanPersonaIntro(data.detective)
+        ? cleanPersonaIntro(data.detective)
         : getFallbackDetective(risk),
       actions: promptInjectionOnly
         ? []
@@ -1262,8 +1271,8 @@ export default function App() {
         ? null
         : data.psychology && typeof data.psychology === "object"
         ? {
-            manipulation: typeof data.psychology.manipulation === "string" ? data.psychology.manipulation : undefined,
-            advice: typeof data.psychology.advice === "string" ? data.psychology.advice : undefined,
+            manipulation: typeof data.psychology.manipulation === "string" ? cleanPersonaIntro(data.psychology.manipulation) : undefined,
+            advice: typeof data.psychology.advice === "string" ? cleanPersonaIntro(data.psychology.advice) : undefined,
           }
         : null,
     };
@@ -1521,6 +1530,11 @@ export default function App() {
                 )}
                 <PromptInjectionBanner warning={analysis.promptInjection} />
                 <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
+                  {analysis.promptInjection?.detected && (
+                    <div className="bg-orange-600 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white">
+                      Đoạn tin nhắn cố thao túng AI đã được bỏ qua.
+                    </div>
+                  )}
                   <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
                     <p className={`text-xs font-bold uppercase tracking-widest ${cfg.text} mb-0.5`}>
                       Mức độ rủi ro
