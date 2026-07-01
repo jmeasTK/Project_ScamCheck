@@ -212,7 +212,8 @@ function detectPromptInjection(text: string): PromptInjectionWarning | null {
     /(?:do not|don't|never)[^\n.]{0,80}(?:return|output|respond)[^\n.]{0,40}(?:json|JSON)/i,
     /(?:return|output|respond)[^\n.]{0,80}(?:only|just)[^\n.]{0,80}(?:safe|not suspicious|no risk|json|JSON)/i,
     /(?:you are now|act as|pretend to be|developer mode|jailbreak|system prompt)/i,
-    /(?:bỏ qua|bo qua|phớt lờ|phot lo|quên|quen|ghi đè|ghi de|vượt qua|vuot qua)[^\n.]{0,120}(?:hướng dẫn|huong dan|lệnh|lenh|quy tắc|quy tac|prompt|system|hệ thống|he thong|trước đó|truoc do)/i,
+    /(?:gemini|scamcheck|ai|trí tuệ nhân tạo|tri tue nhan tao)[^\n.]{0,120}(?:bỏ qua|bo qua|ignore|đổi|doi|change|trả lời|tra loi|phản hồi|phan hoi|json|risk|mức độ rủi ro|muc do rui ro)/i,
+    /(?:bỏ qua|bo qua|phớt lờ|phot lo|quên|quen|ghi đè|ghi de|vượt qua|vuot qua)[^\n.]{0,120}(?:prompt|system|developer|json|định dạng|dinh dang|risk|mức độ rủi ro|muc do rui ro|hệ thống AI|he thong ai|gemini|scamcheck)/i,
     /(?:không|khong|đừng|dung)[^\n.]{0,80}(?:trả về|tra ve|xuất|xuat)[^\n.]{0,40}(?:json|JSON)/i,
     /(?:chỉ|chi)[^\n.]{0,60}(?:trả về|tra ve|nói|noi)[^\n.]{0,80}(?:an toàn|an toan|không đáng ngờ|khong dang ngo|không có rủi ro|khong co rui ro)/i,
   ];
@@ -223,7 +224,7 @@ function detectPromptInjection(text: string): PromptInjectionWarning | null {
       return {
         detected: true,
         quote: quote.slice(0, 180),
-        reason: "Tin nhắn có câu chữ giống yêu cầu điều khiển AI hoặc thay đổi cách ScamCheck trả lời. ScamCheck đã bỏ qua phần này khi phân tích.",
+        reason: "Đoạn này giống yêu cầu điều khiển cách ScamCheck/Gemini trả lời hoặc thay đổi định dạng phân tích. ScamCheck đã tách riêng và bỏ qua đoạn này khi phân tích.",
       };
     }
   }
@@ -855,10 +856,10 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện tin nhắn đang cố thao túng AI</p>
+              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện câu giống lệnh điều khiển AI</p>
             </div>
             <p className="text-sm font-medium text-orange-950/90 dark:text-orange-100/90 leading-relaxed">
-              Một đoạn tin nhắn trên đang cố ra lệnh cho ScamCheck/Gemini thay đổi cách trả lời. ScamCheck đã tách riêng và bỏ qua đoạn tin nhắn này.
+              Một đoạn trong tin nhắn giống yêu cầu điều khiển cách ScamCheck/Gemini trả lời hoặc thay đổi định dạng phân tích. ScamCheck đã tách riêng và bỏ qua đoạn này.
             </p>
           </div>
           {warning.quote && (
@@ -1230,13 +1231,18 @@ export default function App() {
     };
 
     const risk = riskMap[data.risk] ?? "medium";
-    const promptInjection = data.promptInjection && typeof data.promptInjection === "object" && data.promptInjection.detected
+    const localPromptInjection = detectPromptInjection(text);
+    const promptInjection = localPromptInjection
       ? {
           detected: true,
-          quote: typeof data.promptInjection.quote === "string" ? data.promptInjection.quote : undefined,
-          reason: typeof data.promptInjection.reason === "string" ? data.promptInjection.reason : undefined,
+          quote: typeof data.promptInjection?.quote === "string" && data.promptInjection.quote.trim()
+            ? data.promptInjection.quote
+            : localPromptInjection.quote,
+          reason: typeof data.promptInjection?.reason === "string" && data.promptInjection.reason.trim()
+            ? data.promptInjection.reason
+            : localPromptInjection.reason,
         }
-      : detectPromptInjection(text);
+      : null;
     const rawAiIndicators = Array.isArray(data.indicators)
       ? mergeRelatedIndicators(
           data.indicators
@@ -1258,7 +1264,7 @@ export default function App() {
       highlights: getIndicatorQuotes(aiIndicators),
       indicators: aiIndicators,
       detective: promptInjectionOnly
-        ? "Tin nhắn này chủ yếu cố điều khiển cách ScamCheck/Gemini trả lời. ScamCheck đã bỏ qua phần thao túng AI và không xem đó là lệnh thật."
+        ? "Tin nhắn này chủ yếu chứa câu giống lệnh điều khiển AI hoặc bỏ qua ngữ cảnh trước đó. ScamCheck đã tách riêng phần đó và không xem là lệnh thật."
         : typeof data.detective === "string" && cleanPersonaIntro(data.detective)
         ? cleanPersonaIntro(data.detective)
         : getFallbackDetective(risk),
@@ -1534,7 +1540,7 @@ export default function App() {
                 <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
                   {analysis.promptInjection?.detected && (
                     <div className="bg-orange-600 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white">
-                      Đoạn tin nhắn cố thao túng AI đã được bỏ qua.
+                      Đoạn giống lệnh điều khiển AI đã được bỏ qua.
                     </div>
                   )}
                   <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
