@@ -884,10 +884,10 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
         <div className="min-w-0 space-y-3">
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện đoạn tin nhắn cố thao túng AI</p>
+              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện đoạn tin nhắn có dấu hiệu thao túng AI</p>
             </div>
             <p className="text-sm font-medium text-orange-950/90 dark:text-orange-100/90 leading-relaxed">
-              Một đoạn trong tin nhắn có vẻ đang yêu cầu điều khiển hoặc thao túng cách ScamCheck trả lời. Đoạn tin này đã được tách riêng và bỏ qua.
+              Một đoạn trong tin nhắn trên có vẻ đang yêu cầu điều khiển hoặc thao túng cách ScamCheck trả lời. Đoạn tin này đã được tách riêng và bỏ qua.
             </p>
           </div>
           {warning.quote && (
@@ -1578,7 +1578,7 @@ export default function App() {
                 <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
                   {analysis.promptInjection?.detected && (
                     <div className="bg-orange-600 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white">
-                      Đoạn tin nhắn cố điều khiển/thao túng AI đã được bỏ qua.
+                      Đoạn tin nhắn có dấu hiệu điều khiển/thao túng AI đã được bỏ qua.
                     </div>
                   )}
                   <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
