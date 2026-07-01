@@ -426,57 +426,94 @@ function withResolvedUrlIndicators<T extends ReturnType<typeof normalizeAnalysis
     indicators: [...missingUrlIndicators, ...analysis.indicators].slice(0, 4),
   };
 }
-function findPromptInjectionQuote(message: string) {
+function normalizePromptControlText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u0111\u0110]/g, "d")
+    .toLowerCase();
+}
+
+function isHighConfidencePromptControlText(value: string) {
+  const text = normalizePromptControlText(value);
   const patterns = [
-    /(?:ignore|disregard|forget|bypass|override)[^\n.]{0,120}(?:previous|above|prior|system|developer|instructions?|rules?|prompt)/i,
-    /(?:do not|don't|never)[^\n.]{0,80}(?:return|output|respond)[^\n.]{0,40}(?:json|JSON)/i,
-    /(?:return|output|respond)[^\n.]{0,80}(?:only|just)[^\n.]{0,80}(?:safe|not suspicious|no risk|json|JSON)/i,
+    /(?:hey|hi|hello)?\s*(?:gemini|scamcheck|chatgpt|ai|assistant|model)\b[\s\S]{0,260}\b(?:ignore|disregard|forget|bypass|override|developer|admin|system|prompt|instructions?|json|output|detective|risk|change|set|modify|say|answer|respond|required|bo qua|doi|tra loi|phan hoi|muc do rui ro|tham tu)\b/i,
+    /\b(?:i am|i'm|im|toi la)\s+(?:a\s+)?(?:developer|admin|system|owner|creator|nha phat trien)\b[\s\S]{0,220}\b(?:prompt|instructions?|json|output|detective|risk|change|set|say|answer|respond)\b/i,
+    /\b(?:whole prompt|system prompt|developer prompt|prompt that you are given|instructions? that you are given)\b/i,
+    /\b(?:detective|psychology|risk|tham tu|tam ly|muc do rui ro)\b[\s\S]{0,160}\b(?:json|output|change|set|high|safe|an toan|say hello|hello|doi|tra loi)\b/i,
+    /\b(?:if you see this|if you are required|when you see this)\b[\s\S]{0,180}\b(?:say|answer|respond|output|change|set|json|risk)\b/i,
+    /(?:change|set|modify|alter)[\s\S]{0,120}(?:risk|json|output|answer|response)/i,
+    /(?:do not|don't|never)[\s\S]{0,120}(?:return|output|respond)[\s\S]{0,80}(?:json)/i,
+    /(?:return|output|respond)[\s\S]{0,140}(?:only|just)[\s\S]{0,100}(?:safe|not suspicious|no risk|json)/i,
     /(?:you are now|act as|pretend to be|developer mode|jailbreak|system prompt)/i,
-    /(?:gemini|scamcheck|ai|trí tuệ nhân tạo|tri tue nhan tao)[^\n.]{0,120}(?:bỏ qua|bo qua|ignore|đổi|doi|change|trả lời|tra loi|phản hồi|phan hoi|json|risk|mức độ rủi ro|muc do rui ro)/i,
-    /(?:bỏ qua|bo qua|phớt lờ|phot lo|quên|quen|ghi đè|ghi de|vượt qua|vuot qua)[^\n.]{0,120}(?:prompt|system|developer|json|định dạng|dinh dang|risk|mức độ rủi ro|muc do rui ro|hệ thống AI|he thong ai|gemini|scamcheck)/i,
-    /(?:không|khong|đừng|dung)[^\n.]{0,80}(?:trả về|tra ve|xuất|xuat)[^\n.]{0,40}(?:json|JSON)/i,
-    /(?:chỉ|chi)[^\n.]{0,60}(?:trả về|tra ve|nói|noi)[^\n.]{0,80}(?:an toàn|an toan|không đáng ngờ|khong dang ngo|không có rủi ro|khong co rui ro)/i,
+    /(?:gemini|scamcheck|chatgpt|ai|tri tue nhan tao)[\s\S]{0,180}(?:bo qua|ignore|doi|change|tra loi|phan hoi|json|risk|muc do rui ro|detective|tham tu|output)/i,
+    /(?:bo qua|phot lo|quen|ghi de|vuot qua)[\s\S]{0,160}(?:prompt|system|developer|json|dinh dang|risk|muc do rui ro|he thong ai|gemini|scamcheck|chatgpt)/i,
+    /(?:khong|dung)[\s\S]{0,120}(?:tra ve|xuat)[\s\S]{0,80}(?:json)/i,
+    /(?:chi)[\s\S]{0,100}(?:tra ve|noi)[\s\S]{0,120}(?:an toan|khong dang ngo|khong co rui ro)/i,
   ];
 
-  for (const pattern of patterns) {
-    const match = message.match(pattern)?.[0]?.trim();
-    if (match) return match.slice(0, 180);
-  }
+  return patterns.some((pattern) => pattern.test(text));
+}
 
-  return "";
+function isPromptControlLikeText(value: string) {
+  const text = normalizePromptControlText(value);
+  if (isHighConfidencePromptControlText(text)) return true;
+
+  return [
+    /(?:ignore|disregard|forget|bypass|override)[\s\S]{0,160}(?:previous|above|prior|system|developer|instructions?|rules?|prompt|request|context)/i,
+    /(?:bo qua|phot lo|quen|ghi de)[\s\S]{0,140}(?:yeu cau|lenh|chi dan|huong dan|ngu canh|truoc do)/i,
+    /(?:doi|thay doi|change|set)[\s\S]{0,120}(?:cau tra loi|phan hoi|ket qua|muc do|risk|output)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function findPromptInjectionQuote(message: string) {
+  if (!isHighConfidencePromptControlText(message)) return "";
+
+  const line = message
+    .split(/\n+/)
+    .map((item) => item.trim())
+    .find((item) => item && isHighConfidencePromptControlText(item));
+
+  return (line || message.trim()).slice(0, 180);
 }
 
 function isPromptInjectionIndicatorText(value: string) {
-  return [
-    /(?:developer|admin|system prompt|prompt|instruction|hướng dẫn|huong dan|quy tắc|quy tac)[^\n.]{0,120}(?:given|project|ignore|bỏ qua|bo qua|lệnh|lenh|rule|whole prompt|toàn bộ prompt|toan bo prompt)/i,
-    /(?:json|output|detective|risk)[^\n.]{0,120}(?:date|time|high|safe|an toàn|an toan|change|say|trả về|tra ve)/i,
-    /(?:change|set|modify|alter)[^\n.]{0,80}(?:risk|json|output|answer|response)/i,
-    /(?:try to|if you see this|if you are required)[^\n.]{0,120}(?:say|answer|change|output|json)/i,
-  ].some((pattern) => pattern.test(value));
+  return isPromptControlLikeText(value);
 }
 
 function withPromptInjectionSafeguard<T extends ReturnType<typeof normalizeAnalysis>>(analysis: T, message: string) {
   const quote = findPromptInjectionQuote(message);
-  if (!quote) return { ...analysis, promptInjection: null };
   const indicators = analysis.indicators.filter((item) => {
-    const text = `${item.quote} ${item.reason}`;
-    if (quote && item.quote.toLowerCase() === quote.toLowerCase()) return false;
+    const text = item.quote + " " + item.reason;
+    const lowerQuote = item.quote.toLowerCase();
+
+    if (quote) {
+      const lowerDetectedQuote = quote.toLowerCase();
+      if (lowerQuote === lowerDetectedQuote || lowerDetectedQuote.includes(lowerQuote) || lowerQuote.includes(lowerDetectedQuote)) {
+        return false;
+      }
+    }
+
     return !isPromptInjectionIndicatorText(text);
   });
+
+  if (!quote) return { ...analysis, indicators, promptInjection: null };
+
   const promptInjectionOnly = indicators.length === 0;
 
   return {
     ...analysis,
     indicators,
+    risk: promptInjectionOnly ? "An to\u00e0n" : analysis.risk,
     detective: promptInjectionOnly
-      ? "Tin nhắn này chủ yếu chứa câu giống lệnh điều khiển AI hoặc bỏ qua ngữ cảnh trước đó. ScamCheck đã tách riêng phần đó và không xem là lệnh thật."
+      ? "Tin nh\u1eafn n\u00e0y ch\u1ee7 y\u1ebfu ch\u1ee9a c\u00e2u gi\u1ed1ng l\u1ec7nh \u0111i\u1ec1u khi\u1ec3n ScamCheck/Gemini ho\u1eb7c thay \u0111\u1ed5i \u0111\u1ecbnh d\u1ea1ng ph\u00e2n t\u00edch. ScamCheck \u0111\u00e3 t\u00e1ch ri\u00eang ph\u1ea7n \u0111\u00f3 v\u00e0 kh\u00f4ng xem l\u00e0 l\u1ec7nh th\u1eadt."
       : analysis.detective,
     actions: promptInjectionOnly ? [] : analysis.actions,
     psychology: promptInjectionOnly ? null : analysis.psychology,
     promptInjection: {
       detected: true,
       quote: analysis.promptInjection?.quote || quote,
-      reason: analysis.promptInjection?.reason || "Đoạn này giống yêu cầu điều khiển cách ScamCheck/Gemini trả lời hoặc thay đổi định dạng phân tích. ScamCheck đã tách riêng và bỏ qua đoạn này khi phân tích.",
+      reason: analysis.promptInjection?.reason || "\u0110o\u1ea1n n\u00e0y gi\u1ed1ng y\u00eau c\u1ea7u \u0111i\u1ec1u khi\u1ec3n c\u00e1ch ScamCheck/Gemini tr\u1ea3 l\u1eddi ho\u1eb7c thay \u0111\u1ed5i \u0111\u1ecbnh d\u1ea1ng ph\u00e2n t\u00edch. ScamCheck \u0111\u00e3 t\u00e1ch ri\u00eang v\u00e0 b\u1ecf qua \u0111o\u1ea1n n\u00e0y khi ph\u00e2n t\u00edch.",
     },
   };
 }
