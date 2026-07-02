@@ -200,6 +200,14 @@ type AnalyzeTextOptions = {
   detectPromptInjection?: boolean;
 };
 
+function cleanPersonaIntro(value: string) {
+  return value
+    .trim()
+    .replace(/^(?:xin\s+chào|chào\s+(?:bạn|anh|chị|cô|chú|ông|bà)?|kính\s+chào)[,!.:\s-]*/i, "")
+    .replace(/^(?:tôi\s+là\s+(?:thám\s+tử|cô\s+tâm\s+lý)[^.!?:,]*[,!.:\s-]*)/i, "")
+    .trim();
+}
+
 function getIndicatorBaseQuote(quote: string) {
   return quote
     .split("->")[0]
@@ -208,44 +216,73 @@ function getIndicatorBaseQuote(quote: string) {
     .toLowerCase() || quote.trim().toLowerCase();
 }
 
-function detectPromptInjection(text: string): PromptInjectionWarning | null {
+function normalizePromptControlText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[\u0111\u0110]/g, "d")
+    .toLowerCase();
+}
+
+function isHighConfidencePromptControlText(value: string) {
+  const text = normalizePromptControlText(value);
   const patterns = [
-    /(?:ignore|disregard|forget|bypass|override)[^\n.]{0,120}(?:previous|above|prior|system|developer|instructions?|rules?|prompt)/i,
-    /(?:do not|don't|never)[^\n.]{0,80}(?:return|output|respond)[^\n.]{0,40}(?:json|JSON)/i,
-    /(?:return|output|respond)[^\n.]{0,80}(?:only|just)[^\n.]{0,80}(?:safe|not suspicious|no risk|json|JSON)/i,
+    /(?:hey|hi|hello)?\s*(?:gemini|scamcheck|chatgpt|ai|assistant|model)\b[\s\S]{0,260}\b(?:ignore|disregard|forget|bypass|override|developer|admin|system|prompt|instructions?|json|output|detective|risk|change|set|modify|say|answer|respond|required|bo qua|doi|tra loi|phan hoi|muc do rui ro|tham tu)\b/i,
+    /\b(?:i am|i'm|im|toi la)\s+(?:a\s+)?(?:developer|admin|system|owner|creator|nha phat trien)\b[\s\S]{0,220}\b(?:prompt|instructions?|json|output|detective|risk|change|set|say|answer|respond)\b/i,
+    /\b(?:whole prompt|system prompt|developer prompt|prompt that you are given|instructions? that you are given)\b/i,
+    /\b(?:detective|psychology|risk|tham tu|tam ly|muc do rui ro)\b[\s\S]{0,160}\b(?:json|output|change|set|high|safe|an toan|say hello|hello|doi|tra loi)\b/i,
+    /\b(?:if you see this|if you are required|when you see this)\b[\s\S]{0,180}\b(?:say|answer|respond|output|change|set|json|risk)\b/i,
+    /(?:change|set|modify|alter)[\s\S]{0,120}(?:risk|json|output|answer|response)/i,
+    /(?:do not|don't|never)[\s\S]{0,120}(?:return|output|respond)[\s\S]{0,80}(?:json)/i,
+    /(?:return|output|respond)[\s\S]{0,140}(?:only|just)[\s\S]{0,100}(?:safe|not suspicious|no risk|json)/i,
     /(?:you are now|act as|pretend to be|developer mode|jailbreak|system prompt)/i,
-    /(?:bỏ qua|bo qua|phớt lờ|phot lo|quên|quen|ghi đè|ghi de|vượt qua|vuot qua)[^\n.]{0,120}(?:hướng dẫn|huong dan|lệnh|lenh|quy tắc|quy tac|prompt|system|hệ thống|he thong|trước đó|truoc do)/i,
-    /(?:không|khong|đừng|dung)[^\n.]{0,80}(?:trả về|tra ve|xuất|xuat)[^\n.]{0,40}(?:json|JSON)/i,
-    /(?:chỉ|chi)[^\n.]{0,60}(?:trả về|tra ve|nói|noi)[^\n.]{0,80}(?:an toàn|an toan|không đáng ngờ|khong dang ngo|không có rủi ro|khong co rui ro)/i,
+    /(?:gemini|scamcheck|chatgpt|ai|tri tue nhan tao)[\s\S]{0,180}(?:bo qua|ignore|doi|change|tra loi|phan hoi|json|risk|muc do rui ro|detective|tham tu|output)/i,
+    /(?:bo qua|phot lo|quen|ghi de|vuot qua)[\s\S]{0,160}(?:prompt|system|developer|json|dinh dang|risk|muc do rui ro|he thong ai|gemini|scamcheck|chatgpt)/i,
+    /(?:khong|dung)[\s\S]{0,120}(?:tra ve|xuat)[\s\S]{0,80}(?:json)/i,
+    /(?:chi)[\s\S]{0,100}(?:tra ve|noi)[\s\S]{0,120}(?:an toan|khong dang ngo|khong co rui ro)/i,
   ];
 
-  for (const pattern of patterns) {
-    const quote = text.match(pattern)?.[0]?.trim();
-    if (quote) {
-      return {
-        detected: true,
-        quote: quote.slice(0, 180),
-        reason: "Tin nhắn cố tình ra lệnh cho AI thay đổi kết quả phân tích và định dạng đầu ra để kiểm tra khả năng thao túng.",
-      };
-    }
-  }
+  return patterns.some((pattern) => pattern.test(text));
+}
 
-  return null;
+function isPromptControlLikeText(value: string) {
+  const text = normalizePromptControlText(value);
+  if (isHighConfidencePromptControlText(text)) return true;
+
+  return [
+    /(?:ignore|disregard|forget|bypass|override)[\s\S]{0,160}(?:previous|above|prior|system|developer|instructions?|rules?|prompt|request|context)/i,
+    /(?:bo qua|phot lo|quen|ghi de)[\s\S]{0,140}(?:yeu cau|lenh|chi dan|huong dan|ngu canh|truoc do)/i,
+    /(?:doi|thay doi|change|set)[\s\S]{0,120}(?:cau tra loi|phan hoi|ket qua|muc do|risk|output)/i,
+  ].some((pattern) => pattern.test(text));
+}
+
+function detectPromptInjection(text: string): PromptInjectionWarning | null {
+  if (!isHighConfidencePromptControlText(text)) return null;
+
+  const quote = text
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .find((line) => line && isHighConfidencePromptControlText(line))
+    || text.trim();
+
+  return {
+    detected: true,
+    quote: quote.slice(0, 180),
+    reason: "Tin nhắn cố tình ra lệnh cho AI thay đổi kết quả phân tích và định dạng đầu ra để kiểm tra khả năng thao túng.",
+  };
 }
 
 function isPromptInjectionIndicator(indicator: Indicator, warning?: PromptInjectionWarning | null) {
   const quote = indicator.quote.trim();
-  const text = `${indicator.quote} ${indicator.reason}`;
+  const text = indicator.quote + " " + indicator.reason;
   const warningQuote = warning?.quote?.trim().toLowerCase();
+  const lowerQuote = quote.toLowerCase();
 
-  if (warningQuote && quote.toLowerCase() === warningQuote) return true;
+  if (warningQuote && (lowerQuote === warningQuote || warningQuote.includes(lowerQuote) || lowerQuote.includes(warningQuote))) {
+    return true;
+  }
 
-  return [
-    /(?:developer|admin|system prompt|prompt|instruction|hÆ°á»›ng dáº«n|huong dan|quy táº¯c|quy tac)[^\n.]{0,120}(?:given|project|ignore|bá» qua|bo qua|lá»‡nh|lenh|rule|whole prompt|toÃ n bá»™ prompt|toan bo prompt)/i,
-    /(?:json|output|detective|risk)[^\n.]{0,120}(?:date|time|high|safe|an toÃ n|an toan|change|say|tráº£ vá»|tra ve)/i,
-    /(?:change|set|modify|alter)[^\n.]{0,80}(?:risk|json|output|answer|response)/i,
-    /(?:try to|if you see this|if you are required)[^\n.]{0,120}(?:say|answer|change|output|json)/i,
-  ].some((pattern) => pattern.test(text));
+  return isPromptControlLikeText(text);
 }
 
 function mergeRelatedIndicators(indicators: Indicator[]) {
@@ -855,23 +892,25 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
   if (!warning?.detected) return null;
 
   return (
-    <div className="rounded-2xl border-2 border-orange-400 dark:border-orange-600 bg-amber-50 dark:bg-[#2a1114] px-4 py-4 shadow-sm">
-      <div className="flex items-start gap-3.5">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-600 text-orange-700 dark:text-white">
-          <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+    <div className="rounded-2xl border-2 border-orange-400 dark:border-orange-500 bg-orange-50 dark:bg-orange-950/50 px-4 py-4 shadow-lg ring-2 ring-orange-200/70 dark:ring-orange-900/50">
+      <div className="flex items-start gap-3">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-600 text-white shadow-sm">
+          <ShieldAlert className="h-5 w-5" aria-hidden="true" />
         </div>
-        <div className="min-w-0 space-y-2">
-          <div>
-            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Phát hiện đoạn tin nhắn có dấu hiệu thao túng AI</p>
-            <p className="text-sm text-amber-900/80 dark:text-amber-100/80 leading-relaxed">
+        <div className="min-w-0 space-y-3">
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-base font-extrabold text-orange-950 dark:text-orange-100">Phát hiện đoạn tin nhắn có dấu hiệu thao túng AI</p>
+            </div>
+            <p className="text-sm font-medium text-orange-950/90 dark:text-orange-100/90 leading-relaxed">
               Một đoạn trong tin nhắn trên có vẻ đang yêu cầu điều khiển hoặc thao túng cách ScamCheck trả lời. Đoạn tin này đã được tách riêng và bỏ qua.
             </p>
           </div>
           {warning.quote && (
-            <div className="rounded-xl border border-orange-300 dark:border-orange-600 bg-white/80 dark:bg-[#120d16] px-3 py-2.5">
-              <p className="text-xs font-mono text-amber-800 dark:text-amber-200 break-words">{warning.quote}</p>
+            <div className="rounded-xl border border-orange-300 dark:border-orange-700 bg-white/85 dark:bg-gray-950/60 px-3 py-2.5">
+              <p className="text-xs font-mono font-semibold text-orange-900 dark:text-orange-100 break-words">{warning.quote}</p>
               {warning.reason && (
-                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
+                <p className="mt-1.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
               )}
             </div>
           )}
@@ -880,7 +919,6 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
     </div>
   );
 }
-
 type HistoryItem = {
   id: string;
   text: string;
@@ -1237,13 +1275,18 @@ export default function App() {
     };
 
     const risk = riskMap[data.risk] ?? "medium";
-    const promptInjection = data.promptInjection && typeof data.promptInjection === "object" && data.promptInjection.detected
+    const localPromptInjection = detectPromptInjection(text);
+    const promptInjection = localPromptInjection
       ? {
           detected: true,
-          quote: typeof data.promptInjection.quote === "string" ? data.promptInjection.quote : undefined,
-          reason: typeof data.promptInjection.reason === "string" ? data.promptInjection.reason : undefined,
+          quote: typeof data.promptInjection?.quote === "string" && data.promptInjection.quote.trim()
+            ? data.promptInjection.quote
+            : localPromptInjection.quote,
+          reason: typeof data.promptInjection?.reason === "string" && data.promptInjection.reason.trim()
+            ? data.promptInjection.reason
+            : localPromptInjection.reason,
         }
-      : detectPromptInjection(text);
+      : null;
     const rawAiIndicators = Array.isArray(data.indicators)
       ? mergeRelatedIndicators(
           data.indicators
@@ -1254,34 +1297,44 @@ export default function App() {
             })),
         )
       : [];
-    const aiIndicators = promptInjection?.detected
-      ? rawAiIndicators.filter((indicator) => !isPromptInjectionIndicator(indicator, promptInjection))
-      : rawAiIndicators;
-    const promptInjectionOnly = Boolean(promptInjection?.detected && aiIndicators.length === 0);
+    const aiIndicators = rawAiIndicators.filter((indicator) => !isPromptInjectionIndicator(indicator, promptInjection));
+    const hasOnlyFilteredPromptControlIndicators = rawAiIndicators.length > 0 && aiIndicators.length === 0;
+    const fallbackAfterFiltering = !promptInjection?.detected && hasOnlyFilteredPromptControlIndicators ? analyzeText(text) : null;
+    const effectiveIndicators = fallbackAfterFiltering?.indicators?.length ? fallbackAfterFiltering.indicators : aiIndicators;
+    const effectiveRisk: Risk = fallbackAfterFiltering?.risk || risk;
+    const effectiveLabel = fallbackAfterFiltering?.label || (data.risk ?? "Nghi ng\u1edd");
+    const promptInjectionOnly = Boolean(promptInjection?.detected && effectiveIndicators.length === 0);
+    const displayedRisk: Risk = promptInjectionOnly ? "low" : effectiveRisk;
+    const displayedLabel = promptInjectionOnly ? "An to\u00e0n" : effectiveLabel;
 
     return {
-      risk: promptInjectionOnly ? "low" : risk,
-      label: promptInjectionOnly ? "An toàn" : data.risk ?? "Nghi ngờ",
-      highlights: getIndicatorQuotes(aiIndicators),
-      indicators: aiIndicators,
+      risk: displayedRisk,
+      label: displayedLabel,
+      highlights: getIndicatorQuotes(effectiveIndicators),
+      indicators: effectiveIndicators,
       detective: promptInjectionOnly
         ? PROMPT_INJECTION_ONLY_DETECTIVE
-        : typeof data.detective === "string" && data.detective.trim()
-        ? data.detective.trim()
-        : getFallbackDetective(risk),
+        : fallbackAfterFiltering?.detective
+        || (typeof data.detective === "string" && cleanPersonaIntro(data.detective)
+          ? cleanPersonaIntro(data.detective)
+          : getFallbackDetective(displayedRisk)),
       actions: promptInjectionOnly
         ? []
+        : fallbackAfterFiltering?.actions?.length
+        ? fallbackAfterFiltering.actions
         : Array.isArray(data.actions)
         ? data.actions.filter((action: unknown): action is string => typeof action === "string" && Boolean(action.trim()))
-        : getFallbackActions(risk),
+        : getFallbackActions(displayedRisk),
       usedFallback: false,
       promptInjection,
       psychology: promptInjectionOnly
         ? null
+        : fallbackAfterFiltering
+        ? fallbackAfterFiltering.psychology
         : data.psychology && typeof data.psychology === "object"
         ? {
-            manipulation: typeof data.psychology.manipulation === "string" ? data.psychology.manipulation : undefined,
-            advice: typeof data.psychology.advice === "string" ? data.psychology.advice : undefined,
+            manipulation: typeof data.psychology.manipulation === "string" ? cleanPersonaIntro(data.psychology.manipulation) : undefined,
+            advice: typeof data.psychology.advice === "string" ? cleanPersonaIntro(data.psychology.advice) : undefined,
           }
         : null,
     };
