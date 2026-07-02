@@ -45,7 +45,7 @@ Chạy bằng Vercel Dev để frontend gọi được serverless API:
 vercel dev
 ```
 
-Không dùng `npm run dev` để test AI, vì nó chỉ chạy Vite frontend và không chạy các API trong thư mục `api/`.
+Không dùng `npm run dev` để test AI, vì lệnh này chỉ chạy Vite frontend và không chạy các API trong thư mục `api/`.
 
 ## Cấu trúc chính
 
@@ -65,4 +65,4 @@ API key Gemini không được đưa lên GitHub. File `.env.local` bị bỏ qu
 
 ## Lưu ý pháp lý
 
-ScamCheck là công cụ giáo dục do nhóm học viên phát triển, và đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
+ScamCheck là công cụ giáo dục do nhóm học viên tại FCT Club phát triển. Đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
