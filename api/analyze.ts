@@ -30,6 +30,20 @@ type GeminiAnalysis = {
   } | null;
 };
 
+type NormalizedGeminiAnalysis = ReturnType<typeof normalizeAnalysis>;
+
+type GeminiAttemptFailure = {
+  model: string;
+  error: string;
+  detail: string;
+  retryable: boolean;
+  status?: number;
+};
+
+type GeminiAnalysisResult =
+  | { ok: true; model: string; data: NormalizedGeminiAnalysis }
+  | { ok: false; attempts: GeminiAttemptFailure[] };
+
 const PROMPT_INJECTION_ONLY_DETECTIVE = "Tin nhắn này chỉ chứa nội dung có dấu hiệu cố thao túng cách ScamCheck phản hồi, không phải yêu cầu chuyển tiền, cung cấp thông tin cá nhân hay mở đường dẫn đáng ngờ. Phần này đã được tách riêng và bỏ qua khi đánh giá rủi ro.";
 
 const GEMINI_RESPONSE_SCHEMA = {
@@ -528,7 +542,7 @@ function isRetryableGeminiFailure(status: number | undefined, detail: string) {
 }
 
 async function requestGeminiAnalysis(apiKey: string, prompt: string, model: string): Promise<
-  | { ok: true; model: string; data: ReturnType<typeof normalizeAnalysis> }
+  | { ok: true; model: string; data: NormalizedGeminiAnalysis }
   | { ok: false; failure: GeminiAttemptFailure }
 > {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
@@ -645,7 +659,7 @@ async function requestGeminiAnalysis(apiKey: string, prompt: string, model: stri
   }
 }
 
-async function generateGeminiAnalysis(apiKey: string, prompt: string) {
+async function generateGeminiAnalysis(apiKey: string, prompt: string): Promise<GeminiAnalysisResult> {
   const attempts: GeminiAttemptFailure[] = [];
 
   for (const model of getGeminiModelsToTry()) {
