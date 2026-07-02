@@ -664,7 +664,7 @@ async function generateGeminiAnalysis(apiKey: string, prompt: string): Promise<G
 
   for (const model of getGeminiModelsToTry()) {
     const result = await requestGeminiAnalysis(apiKey, prompt, model);
-    if (result.ok) return result;
+    if (result.ok === true) return result;
 
     attempts.push(result.failure);
     if (!result.failure.retryable) break;
@@ -754,7 +754,7 @@ Cấu trúc JSON:
 
   const geminiResult = await generateGeminiAnalysis(apiKey, prompt);
 
-  if (geminiResult.ok) {
+  if (geminiResult.ok === true) {
     const guardedAnalysis = withPromptInjectionSafeguard(geminiResult.data, message);
     return res.status(200).json(withResolvedUrlIndicators(guardedAnalysis, analyzedUrls));
   }
