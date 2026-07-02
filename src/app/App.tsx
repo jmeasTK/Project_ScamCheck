@@ -103,7 +103,7 @@ function getAnalyzeErrorToast(error: unknown) {
     if (error.code === "invalid_json") {
       return {
         title: "AI trả kết quả chưa đúng định dạng",
-        description: "Gemini phản hồi không đúng cấu trúc JSON. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
+        description: "AI phản hồi không đúng cấu trúc. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
@@ -156,6 +156,10 @@ function getAnalyzeErrorToast(error: unknown) {
   };
 }
 
+function shouldDetectPromptInjectionInFallback(error: unknown) {
+  return error instanceof AnalyzeError && (error.code === "invalid_json" || error.code === "truncated");
+}
+
 type Indicator = {
   quote: string;
   reason: string;
@@ -166,6 +170,8 @@ type PromptInjectionWarning = {
   quote?: string;
   reason?: string;
 };
+
+const PROMPT_INJECTION_ONLY_DETECTIVE = "Tin nhắn này chỉ chứa nội dung có dấu hiệu cố thao túng cách ScamCheck phản hồi, không phải yêu cầu chuyển tiền, cung cấp thông tin cá nhân hay mở đường dẫn đáng ngờ. Phần này đã được tách riêng và bỏ qua khi đánh giá rủi ro.";
 
 type UrlAnalysis = {
   original: string;
@@ -189,6 +195,10 @@ interface Analysis {
   usedFallback?: boolean;
   promptInjection?: PromptInjectionWarning | null;
 }
+
+type AnalyzeTextOptions = {
+  detectPromptInjection?: boolean;
+};
 
 function getIndicatorBaseQuote(quote: string) {
   return quote
@@ -215,7 +225,7 @@ function detectPromptInjection(text: string): PromptInjectionWarning | null {
       return {
         detected: true,
         quote: quote.slice(0, 180),
-        reason: "Tin nhắn có câu chữ giống yêu cầu điều khiển AI hoặc thay đổi cách ScamCheck trả lời. ScamCheck đã bỏ qua phần này khi phân tích.",
+        reason: "Tin nhắn cố tình ra lệnh cho AI thay đổi kết quả phân tích và định dạng đầu ra để kiểm tra khả năng thao túng.",
       };
     }
   }
@@ -496,10 +506,10 @@ function getResolvedShortUrlIndicators(text: string, resolvedUrls: UrlAnalysis[]
     })
     .filter((item): item is Indicator => Boolean(item));
 }
-function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
+function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = [], options: AnalyzeTextOptions = {}): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
-  const promptInjection = detectPromptInjection(text);
+  const promptInjection = options.detectPromptInjection ? detectPromptInjection(text) : null;
   const normalized = normalizeVietnamese(text);
   const actionableText = getActionableText(normalized);
   const urls = extractUrlsFromText(text);
@@ -541,13 +551,16 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
 
   if (safeNotice) {
     const safeUrlIndicators = getResolvedShortUrlIndicators(text, resolvedUrls);
+    const promptInjectionOnly = Boolean(promptInjection?.detected && safeUrlIndicators.length === 0);
 
     return {
       risk: "low",
       label: "An toàn",
       highlights: getIndicatorQuotes(safeUrlIndicators),
       indicators: safeUrlIndicators,
-      detective: "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
+      detective: promptInjectionOnly
+        ? PROMPT_INJECTION_ONLY_DETECTIVE
+        : "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
       actions: [],
       usedFallback: true,
       psychology: null,
@@ -754,21 +767,24 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   const label = risk === "high" ? "Lừa đảo" : risk === "medium" ? "Nghi ngờ" : "An toàn";
   const mergedIndicators = mergeRelatedIndicators(indicators);
   const highlights = getIndicatorQuotes(mergedIndicators);
+  const promptInjectionOnly = Boolean(promptInjection?.detected && mergedIndicators.length === 0);
 
   return {
-    risk,
-    label,
+    risk: promptInjectionOnly ? "low" : risk,
+    label: promptInjectionOnly ? "An toàn" : label,
     highlights,
     indicators: mergedIndicators,
-    detective: risk === "high"
+    detective: promptInjectionOnly
+      ? PROMPT_INJECTION_ONLY_DETECTIVE
+      : risk === "high"
       ? "Bộ phân tích dự phòng phát hiện nhiều dấu hiệu rủi ro trong tin nhắn này, đặc biệt là yêu cầu hành động gấp, giả danh hoặc dẫn tới kênh không chính thức."
       : risk === "medium"
         ? "Bộ phân tích dự phòng thấy một số điểm cần kiểm chứng. Bạn chưa nên làm theo tin nhắn cho đến khi xác minh qua kênh chính thức."
         : "Bộ phân tích dự phòng chưa thấy dấu hiệu lừa đảo rõ ràng, nhưng bạn vẫn nên cẩn thận với mọi yêu cầu cung cấp thông tin cá nhân.",
-    actions: getFallbackActions(risk),
+    actions: promptInjectionOnly ? [] : getFallbackActions(risk),
     usedFallback: true,
     promptInjection,
-    psychology: risk === "low" ? null : {
+    psychology: promptInjectionOnly || risk === "low" ? null : {
       manipulation: risk === "high" ? "Tin nhắn có thể đang tạo sợ hãi hoặc áp lực gấp." : "Tin nhắn có thể khiến người nhận phân vân và mất cảnh giác.",
       advice: getFallbackPsychology(risk),
     },
@@ -839,20 +855,20 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
   if (!warning?.detected) return null;
 
   return (
-    <div className="rounded-2xl border border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-700 dark:text-amber-200">
+    <div className="rounded-2xl border-2 border-orange-400 dark:border-orange-600 bg-amber-50 dark:bg-[#2a1114] px-4 py-4 shadow-sm">
+      <div className="flex items-start gap-3.5">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 dark:bg-orange-600 text-orange-700 dark:text-white">
           <ShieldAlert className="h-4 w-4" aria-hidden="true" />
         </div>
         <div className="min-w-0 space-y-2">
           <div>
-            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Cảnh báo điều khiển AI</p>
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-100">Phát hiện đoạn tin nhắn có dấu hiệu thao túng AI</p>
             <p className="text-sm text-amber-900/80 dark:text-amber-100/80 leading-relaxed">
-              Tin nhắn này có vẻ đang yêu cầu thao túng cách ScamCheck trả lời. Phần này đã được tách riêng và không được xem là lệnh thật.
+              Một đoạn trong tin nhắn trên có vẻ đang yêu cầu điều khiển hoặc thao túng cách ScamCheck trả lời. Đoạn tin này đã được tách riêng và bỏ qua.
             </p>
           </div>
           {warning.quote && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-white/70 dark:bg-gray-900/50 px-3 py-2">
+            <div className="rounded-xl border border-orange-300 dark:border-orange-600 bg-white/80 dark:bg-[#120d16] px-3 py-2.5">
               <p className="text-xs font-mono text-amber-800 dark:text-amber-200 break-words">{warning.quote}</p>
               {warning.reason && (
                 <p className="mt-1 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
@@ -1187,23 +1203,23 @@ export default function App() {
       const errorText = `${data?.error ?? ""} ${detail}`.toLowerCase();
 
       if (data?.error === "Gemini response truncated") {
-        throw new AnalyzeError("truncated", "Gemini bị cắt ngắn kết quả", response.status);
+        throw new AnalyzeError("truncated", "AI bị cắt ngắn kết quả", response.status);
       }
 
       if (data?.error === "Gemini returned invalid JSON") {
-        throw new AnalyzeError("invalid_json", "Gemini trả sai định dạng JSON", response.status);
+        throw new AnalyzeError("invalid_json", "AI trả sai định dạng", response.status);
       }
 
       if (response.status === 401 || errorText.includes("unauthenticated") || errorText.includes("api key") || errorText.includes("authentication")) {
-        throw new AnalyzeError("auth", "Gemini API key không hợp lệ", response.status);
+        throw new AnalyzeError("auth", "API key AI không hợp lệ", response.status);
       }
 
       if (response.status === 429 || errorText.includes("quota") || errorText.includes("rate limit") || errorText.includes("resource_exhausted")) {
-        throw new AnalyzeError("quota", "Gemini bị giới hạn lượt gọi", response.status);
+        throw new AnalyzeError("quota", "AI bị giới hạn lượt gọi", response.status);
       }
 
       if (response.status === 503 || errorText.includes("overload") || errorText.includes("overloaded") || errorText.includes("unavailable") || errorText.includes("try again later")) {
-        throw new AnalyzeError("overloaded", "Gemini đang quá tải", response.status);
+        throw new AnalyzeError("overloaded", "AI đang quá tải", response.status);
       }
 
       if (response.status >= 500) {
@@ -1244,11 +1260,13 @@ export default function App() {
     const promptInjectionOnly = Boolean(promptInjection?.detected && aiIndicators.length === 0);
 
     return {
-      risk,
-      label: data.risk ?? "Nghi ngờ",
+      risk: promptInjectionOnly ? "low" : risk,
+      label: promptInjectionOnly ? "An toàn" : data.risk ?? "Nghi ngờ",
       highlights: getIndicatorQuotes(aiIndicators),
       indicators: aiIndicators,
-      detective: typeof data.detective === "string" && data.detective.trim()
+      detective: promptInjectionOnly
+        ? PROMPT_INJECTION_ONLY_DETECTIVE
+        : typeof data.detective === "string" && data.detective.trim()
         ? data.detective.trim()
         : getFallbackDetective(risk),
       actions: promptInjectionOnly
@@ -1308,12 +1326,13 @@ export default function App() {
       });
 
       let fallbackResult: Analysis;
+      const detectPromptInjectionInFallback = shouldDetectPromptInjectionInFallback(error);
 
       try {
         const fallbackUrls = await resolveUrlsForFallback(input);
-        fallbackResult = analyzeText(input, fallbackUrls);
+        fallbackResult = analyzeText(input, fallbackUrls, { detectPromptInjection: detectPromptInjectionInFallback });
       } catch {
-        fallbackResult = analyzeText(input);
+        fallbackResult = analyzeText(input, [], { detectPromptInjection: detectPromptInjectionInFallback });
       }
 
       setAnalysis(fallbackResult);
@@ -1520,8 +1539,8 @@ export default function App() {
                   </div>
                 )}
                 <PromptInjectionBanner warning={analysis.promptInjection} />
-                <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
-                  <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
+                <div className={`rounded-2xl border-2 ${cfg.border} overflow-hidden shadow-sm`}>
+                  <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b-2 ${cfg.border}`}>
                     <p className={`text-xs font-bold uppercase tracking-widest ${cfg.text} mb-0.5`}>
                       Mức độ rủi ro
                     </p>
@@ -1536,7 +1555,7 @@ export default function App() {
                 </div>
 
                 {/* Detective card */}
-                <div className="rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                   <div className="bg-slate-800 dark:bg-slate-900 px-4 py-2.5 flex items-center gap-2">
                     <span className="text-lg">🕵️</span>
                     <span className="text-xs font-bold text-slate-100 uppercase tracking-wider">Thám tử phân tích</span>
@@ -1578,7 +1597,7 @@ export default function App() {
 
                 {/* Psychologist card */}
                 {(analysis.risk === "high" || analysis.risk === "medium") && (
-                  <div className="rounded-2xl border border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                  <div className="rounded-2xl border-2 border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                     <div className="bg-purple-600 dark:bg-purple-800 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-lg">🧠</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Cô tâm lý</span>
@@ -1591,7 +1610,7 @@ export default function App() {
 
                 {/* Người ứng cứu — situation question */}
                 {(analysis.risk === "high" || analysis.risk === "medium") && (
-                  <div className="rounded-2xl border border-orange-200 dark:border-orange-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                  <div className="rounded-2xl border-2 border-orange-200 dark:border-orange-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                     <div className="bg-orange-500 dark:bg-orange-700 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-lg">🚨</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Người ứng cứu</span>
@@ -1709,7 +1728,7 @@ export default function App() {
                   return (
                     <div
                       key={item.id}
-                      className={`rounded-xl border p-3.5 space-y-2 cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 ${c.histBorder}`}
+                      className={`rounded-xl border-2 p-3.5 space-y-2 cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 ${c.histBorder}`}
                       onClick={() => setSelectedHistory(item)}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1719,11 +1738,18 @@ export default function App() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                         {item.usedFallback ? (
                           <span className="rounded-full border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:text-yellow-200">
                             Dùng bộ phân tích dự phòng
                           </span>
-                        ) : <span />}
+                        ) : null}
+                          {item.promptInjection?.detected && (
+                            <span className="rounded-full border border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/30 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-200">
+                              Có dấu hiệu thao túng AI
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-gray-400 dark:text-gray-300">{formatTime(item.time)}</span>
                       </div>
                     </div>
@@ -1742,9 +1768,9 @@ export default function App() {
           const itemActionItems = item.actions?.length ? item.actions : getFallbackActions(item.risk);
           const itemPsychologyText = item.psychology?.advice || getFallbackPsychology(item.risk);
           return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 overflow-hidden">
               {/* Header */}
-              <div className={`${c.bg} ${c.border} border-b px-5 py-4 flex items-center gap-3`}>
+              <div className={`${c.bg} ${c.border} border-b-2 px-5 py-4 flex items-center gap-3`}>
                 <button
                   onClick={() => setSelectedHistory(null)}
                   className={`w-8 h-8 rounded-full border-2 ${c.border} hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 transition-all duration-150 flex items-center justify-center shrink-0`}
@@ -1779,7 +1805,7 @@ export default function App() {
                 </div>
 
                 {/* Detective card */}
-                <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden">
+                <div className="rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden">
                   <div className="bg-slate-800 dark:bg-slate-900 px-4 py-2.5 flex items-center gap-2">
                     <span className="text-base">🕵️</span>
                     <span className="text-xs font-bold text-slate-100 uppercase tracking-wider">Thám tử phân tích</span>
@@ -1821,7 +1847,7 @@ export default function App() {
 
                 {/* Psychologist card */}
                 {(item.risk === "high" || item.risk === "medium") && (
-                  <div className="rounded-xl border border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden">
+                  <div className="rounded-xl border-2 border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden">
                     <div className="bg-purple-600 dark:bg-purple-800 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-base">🧠</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Cô tâm lý</span>
