@@ -5,3 +5,4 @@ dist
 !.env.example
 *.local
 Project_ScamCheck/
+*.sync-conflict-*
