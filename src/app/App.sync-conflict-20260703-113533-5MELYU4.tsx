@@ -103,7 +103,7 @@ function getAnalyzeErrorToast(error: unknown) {
     if (error.code === "invalid_json") {
       return {
         title: "AI trả kết quả chưa đúng định dạng",
-        description: "AI phản hồi không đúng cấu trúc. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
+        description: "Gemini phản hồi không đúng cấu trúc JSON. ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.",
       };
     }
 
@@ -156,10 +156,6 @@ function getAnalyzeErrorToast(error: unknown) {
   };
 }
 
-function shouldDetectPromptInjectionInFallback(error: unknown) {
-  return error instanceof AnalyzeError && (error.code === "invalid_json" || error.code === "truncated");
-}
-
 type Indicator = {
   quote: string;
   reason: string;
@@ -170,8 +166,6 @@ type PromptInjectionWarning = {
   quote?: string;
   reason?: string;
 };
-
-const PROMPT_INJECTION_ONLY_DETECTIVE = "Tin nhắn này chỉ chứa nội dung có dấu hiệu cố thao túng cách ScamCheck phản hồi, không phải yêu cầu chuyển tiền, cung cấp thông tin cá nhân hay mở đường dẫn đáng ngờ. Phần này đã được tách riêng và bỏ qua khi đánh giá rủi ro.";
 
 type UrlAnalysis = {
   original: string;
@@ -195,10 +189,6 @@ interface Analysis {
   usedFallback?: boolean;
   promptInjection?: PromptInjectionWarning | null;
 }
-
-type AnalyzeTextOptions = {
-  detectPromptInjection?: boolean;
-};
 
 function cleanPersonaIntro(value: string) {
   return value
@@ -268,7 +258,7 @@ function detectPromptInjection(text: string): PromptInjectionWarning | null {
   return {
     detected: true,
     quote: quote.slice(0, 180),
-    reason: "Tin nhắn cố tình ra lệnh cho AI thay đổi kết quả phân tích và định dạng đầu ra để kiểm tra khả năng thao túng.",
+    reason: "\u0110o\u1ea1n n\u00e0y gi\u1ed1ng y\u00eau c\u1ea7u \u0111i\u1ec1u khi\u1ec3n c\u00e1ch ScamCheck/Gemini tr\u1ea3 l\u1eddi ho\u1eb7c thay \u0111\u1ed5i \u0111\u1ecbnh d\u1ea1ng ph\u00e2n t\u00edch. ScamCheck \u0111\u00e3 t\u00e1ch ri\u00eang v\u00e0 b\u1ecf qua \u0111o\u1ea1n n\u00e0y khi ph\u00e2n t\u00edch.",
   };
 }
 
@@ -543,10 +533,10 @@ function getResolvedShortUrlIndicators(text: string, resolvedUrls: UrlAnalysis[]
     })
     .filter((item): item is Indicator => Boolean(item));
 }
-function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = [], options: AnalyzeTextOptions = {}): Analysis {
+function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = []): Analysis {
   if (!text.trim()) return { risk: null, label: "", highlights: [], indicators: [] };
 
-  const promptInjection = options.detectPromptInjection ? detectPromptInjection(text) : null;
+  const promptInjection = detectPromptInjection(text);
   const normalized = normalizeVietnamese(text);
   const actionableText = getActionableText(normalized);
   const urls = extractUrlsFromText(text);
@@ -588,16 +578,13 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = [], options: An
 
   if (safeNotice) {
     const safeUrlIndicators = getResolvedShortUrlIndicators(text, resolvedUrls);
-    const promptInjectionOnly = Boolean(promptInjection?.detected && safeUrlIndicators.length === 0);
 
     return {
       risk: "low",
       label: "An toàn",
       highlights: getIndicatorQuotes(safeUrlIndicators),
       indicators: safeUrlIndicators,
-      detective: promptInjectionOnly
-        ? PROMPT_INJECTION_ONLY_DETECTIVE
-        : "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
+      detective: "Bộ phân tích dự phòng nhận thấy đây là nội dung thông báo/cảnh báo an toàn, không phải tin nhắn đang dụ bạn cung cấp thông tin nhạy cảm hay chuyển tiền.",
       actions: [],
       usedFallback: true,
       psychology: null,
@@ -804,24 +791,21 @@ function analyzeText(text: string, resolvedUrls: UrlAnalysis[] = [], options: An
   const label = risk === "high" ? "Lừa đảo" : risk === "medium" ? "Nghi ngờ" : "An toàn";
   const mergedIndicators = mergeRelatedIndicators(indicators);
   const highlights = getIndicatorQuotes(mergedIndicators);
-  const promptInjectionOnly = Boolean(promptInjection?.detected && mergedIndicators.length === 0);
 
   return {
-    risk: promptInjectionOnly ? "low" : risk,
-    label: promptInjectionOnly ? "An toàn" : label,
+    risk,
+    label,
     highlights,
     indicators: mergedIndicators,
-    detective: promptInjectionOnly
-      ? PROMPT_INJECTION_ONLY_DETECTIVE
-      : risk === "high"
+    detective: risk === "high"
       ? "Bộ phân tích dự phòng phát hiện nhiều dấu hiệu rủi ro trong tin nhắn này, đặc biệt là yêu cầu hành động gấp, giả danh hoặc dẫn tới kênh không chính thức."
       : risk === "medium"
         ? "Bộ phân tích dự phòng thấy một số điểm cần kiểm chứng. Bạn chưa nên làm theo tin nhắn cho đến khi xác minh qua kênh chính thức."
         : "Bộ phân tích dự phòng chưa thấy dấu hiệu lừa đảo rõ ràng, nhưng bạn vẫn nên cẩn thận với mọi yêu cầu cung cấp thông tin cá nhân.",
-    actions: promptInjectionOnly ? [] : getFallbackActions(risk),
+    actions: getFallbackActions(risk),
     usedFallback: true,
     promptInjection,
-    psychology: promptInjectionOnly || risk === "low" ? null : {
+    psychology: risk === "low" ? null : {
       manipulation: risk === "high" ? "Tin nhắn có thể đang tạo sợ hãi hoặc áp lực gấp." : "Tin nhắn có thể khiến người nhận phân vân và mất cảnh giác.",
       advice: getFallbackPsychology(risk),
     },
@@ -907,7 +891,7 @@ function PromptInjectionBanner({ warning }: { warning?: PromptInjectionWarning |
             </p>
           </div>
           {warning.quote && (
-            <div className="rounded-xl border-2 border-orange-300 dark:border-orange-700 bg-white/85 dark:bg-gray-950/60 px-3 py-2.5">
+            <div className="rounded-xl border border-orange-300 dark:border-orange-700 bg-white/85 dark:bg-gray-950/60 px-3 py-2.5">
               <p className="text-xs font-mono font-semibold text-orange-900 dark:text-orange-100 break-words">{warning.quote}</p>
               {warning.reason && (
                 <p className="mt-1.5 text-xs text-slate-700 dark:text-slate-300 leading-relaxed">{warning.reason}</p>
@@ -1052,8 +1036,8 @@ function ExposeTab({ openFolder, setOpenFolder }: { openFolder: string | null; s
   if (active) {
     const c = folderColors[active.color];
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 overflow-hidden">
-        <div className={`${c.bg} ${c.border} border-b-2 px-5 py-4 flex items-center gap-3`}>
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
+        <div className={`${c.bg} ${c.border} border-b px-5 py-4 flex items-center gap-3`}>
           <button
             onClick={() => setOpenFolder(null)}
             className={`w-8 h-8 rounded-full border-2 ${c.border} hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 transition-all duration-150 flex items-center justify-center shrink-0`}
@@ -1075,7 +1059,7 @@ function ExposeTab({ openFolder, setOpenFolder }: { openFolder: string | null; s
             <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Ví dụ thực tế</p>
             <div className="space-y-2">
               {active.examples.map((ex, i) => (
-                <div key={i} className={`rounded-xl px-4 py-3 ${c.bg} border-2 ${c.border}`}>
+                <div key={i} className={`rounded-xl px-4 py-3 ${c.bg} border ${c.border}`}>
                   <p className={`text-xs font-semibold ${c.text} mb-1`}>{ex.name}</p>
                   <p className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">{ex.desc}</p>
                 </div>
@@ -1101,7 +1085,7 @@ function ExposeTab({ openFolder, setOpenFolder }: { openFolder: string | null; s
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 p-5 space-y-3">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-3">
       <div className="mb-1">
         <h2 className="text-sm font-bold text-gray-800 dark:text-gray-100">Nhận biết lừa đảo bằng cách nào?</h2>
         <p className="text-xs text-gray-600 dark:text-gray-300 mt-0.5">Chọn một danh mục để xem các chiêu trò phổ biến</p>
@@ -1113,7 +1097,7 @@ function ExposeTab({ openFolder, setOpenFolder }: { openFolder: string | null; s
           <button
             key={folder.id}
             onClick={() => setOpenFolder(folder.id)}
-            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border-2 ${c.border} ${c.bg} hover:brightness-95 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left`}
+            className={`w-full flex items-center gap-4 px-4 py-3.5 rounded-xl border ${c.border} ${c.bg} hover:brightness-95 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 text-left`}
           >
             <span className={`text-2xl w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${c.iconBg}`}>
               {folder.icon}
@@ -1241,23 +1225,23 @@ export default function App() {
       const errorText = `${data?.error ?? ""} ${detail}`.toLowerCase();
 
       if (data?.error === "Gemini response truncated") {
-        throw new AnalyzeError("truncated", "AI bị cắt ngắn kết quả", response.status);
+        throw new AnalyzeError("truncated", "Gemini bị cắt ngắn kết quả", response.status);
       }
 
       if (data?.error === "Gemini returned invalid JSON") {
-        throw new AnalyzeError("invalid_json", "AI trả sai định dạng", response.status);
+        throw new AnalyzeError("invalid_json", "Gemini trả sai định dạng JSON", response.status);
       }
 
       if (response.status === 401 || errorText.includes("unauthenticated") || errorText.includes("api key") || errorText.includes("authentication")) {
-        throw new AnalyzeError("auth", "API key AI không hợp lệ", response.status);
+        throw new AnalyzeError("auth", "Gemini API key không hợp lệ", response.status);
       }
 
       if (response.status === 429 || errorText.includes("quota") || errorText.includes("rate limit") || errorText.includes("resource_exhausted")) {
-        throw new AnalyzeError("quota", "AI bị giới hạn lượt gọi", response.status);
+        throw new AnalyzeError("quota", "Gemini bị giới hạn lượt gọi", response.status);
       }
 
       if (response.status === 503 || errorText.includes("overload") || errorText.includes("overloaded") || errorText.includes("unavailable") || errorText.includes("try again later")) {
-        throw new AnalyzeError("overloaded", "AI đang quá tải", response.status);
+        throw new AnalyzeError("overloaded", "Gemini đang quá tải", response.status);
       }
 
       if (response.status >= 500) {
@@ -1313,7 +1297,7 @@ export default function App() {
       highlights: getIndicatorQuotes(effectiveIndicators),
       indicators: effectiveIndicators,
       detective: promptInjectionOnly
-        ? PROMPT_INJECTION_ONLY_DETECTIVE
+        ? "Tin nh\u1eafn n\u00e0y ch\u1ee7 y\u1ebfu ch\u1ee9a c\u00e2u gi\u1ed1ng l\u1ec7nh \u0111i\u1ec1u khi\u1ec3n ScamCheck/Gemini ho\u1eb7c thay \u0111\u1ed5i \u0111\u1ecbnh d\u1ea1ng ph\u00e2n t\u00edch. ScamCheck \u0111\u00e3 t\u00e1ch ri\u00eang ph\u1ea7n \u0111\u00f3 v\u00e0 kh\u00f4ng xem l\u00e0 l\u1ec7nh th\u1eadt."
         : fallbackAfterFiltering?.detective
         || (typeof data.detective === "string" && cleanPersonaIntro(data.detective)
           ? cleanPersonaIntro(data.detective)
@@ -1379,13 +1363,12 @@ export default function App() {
       });
 
       let fallbackResult: Analysis;
-      const detectPromptInjectionInFallback = shouldDetectPromptInjectionInFallback(error);
 
       try {
         const fallbackUrls = await resolveUrlsForFallback(input);
-        fallbackResult = analyzeText(input, fallbackUrls, { detectPromptInjection: detectPromptInjectionInFallback });
+        fallbackResult = analyzeText(input, fallbackUrls);
       } catch {
-        fallbackResult = analyzeText(input, [], { detectPromptInjection: detectPromptInjectionInFallback });
+        fallbackResult = analyzeText(input);
       }
 
       setAnalysis(fallbackResult);
@@ -1432,7 +1415,7 @@ export default function App() {
         <div className="fixed inset-0 z-50 flex items-center justify-center px-4" onClick={() => setShowConfirm(false)}>
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
           <div
-            className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl border-2 border-gray-100 dark:border-gray-700 p-6 w-full max-w-sm space-y-4"
+            className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-100 dark:border-gray-700 p-6 w-full max-w-sm space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3">
@@ -1503,7 +1486,7 @@ export default function App() {
         {/* Tabs — sticky on mobile */}
         <div ref={tabsRef} className="sticky top-2 z-30 relative mx-[3px]">
           <div className={`pointer-events-none absolute -left-3 -right-3 -top-2 h-32 bg-gradient-to-b from-[#f0f4ff] via-[#f0f4ff]/95 via-45% to-transparent dark:from-gray-900 dark:via-gray-900/95 transition-opacity duration-150 ${isTabPinned ? "opacity-100" : "opacity-0"}`} />
-          <div className="relative z-10 flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border-2 border-gray-100 dark:border-gray-700">
+          <div className="relative z-10 flex gap-1 bg-white dark:bg-gray-800 rounded-xl p-1 shadow-sm border border-gray-100 dark:border-gray-700">
             {(["check", "expose", "history"] as const).map((t) => {
               const labels = { check: "Kiểm tra", expose: "Nhận biết lừa đảo", history: "Lịch sử" };
               return (
@@ -1526,7 +1509,7 @@ export default function App() {
         {/* Tab: Check */}
         {tab === "check" && (
           <div className="space-y-4">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 p-5 space-y-4 lg:self-start">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-4 lg:self-start">
               <div>
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Thử tính năng:</p>
                 <div className="flex flex-wrap gap-2">
@@ -1559,7 +1542,7 @@ export default function App() {
                 disabled={loading}
                 placeholder="Dán hoặc gõ nội dung tin nhắn nghi ngờ vào đây..."
                 rows={5}
-                className="w-full resize-y rounded-xl border-2 border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] disabled:cursor-not-allowed disabled:resize-none disabled:bg-[#f8f9ff] dark:disabled:bg-gray-900 disabled:text-gray-700 dark:disabled:text-gray-200 disabled:placeholder:text-gray-400 dark:disabled:placeholder:text-gray-500 transition min-h-[120px] lg:min-h-[140px]"
+                className="w-full resize-y rounded-xl border border-gray-200 dark:border-gray-600 bg-[#f8f9ff] dark:bg-gray-900 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 focus:border-[#2563eb] disabled:cursor-not-allowed disabled:resize-none disabled:bg-[#f8f9ff] dark:disabled:bg-gray-900 disabled:text-gray-700 dark:disabled:text-gray-200 disabled:placeholder:text-gray-400 dark:disabled:placeholder:text-gray-500 transition min-h-[120px] lg:min-h-[140px]"
               />
               </div>
 
@@ -1587,13 +1570,18 @@ export default function App() {
             {cfg && input.trim() && (
               <div className="space-y-3">
                 {analysis.usedFallback && (
-                  <div className="rounded-xl border-2 border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200 leading-relaxed">
+                  <div className="rounded-xl border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200 leading-relaxed">
                     Không kết nối được tới máy chủ AI, ScamCheck sẽ sử dụng bộ phân tích dự phòng.
                   </div>
                 )}
                 <PromptInjectionBanner warning={analysis.promptInjection} />
-                <div className={`rounded-2xl border-2 ${cfg.border} overflow-hidden shadow-sm`}>
-                  <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b-2 ${cfg.border}`}>
+                <div className={`rounded-2xl border ${cfg.border} overflow-hidden shadow-sm`}>
+                  {analysis.promptInjection?.detected && (
+                    <div className="bg-orange-600 px-4 py-2 text-center text-xs sm:text-sm font-bold text-white">
+                      Đoạn tin nhắn có dấu hiệu điều khiển/thao túng AI đã được bỏ qua.
+                    </div>
+                  )}
+                  <div className={`${cfg.bg} px-5 pt-4 pb-3 text-center border-b ${cfg.border}`}>
                     <p className={`text-xs font-bold uppercase tracking-widest ${cfg.text} mb-0.5`}>
                       Mức độ rủi ro
                     </p>
@@ -1608,7 +1596,7 @@ export default function App() {
                 </div>
 
                 {/* Detective card */}
-                <div className="rounded-2xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                   <div className="bg-slate-800 dark:bg-slate-900 px-4 py-2.5 flex items-center gap-2">
                     <span className="text-lg">🕵️</span>
                     <span className="text-xs font-bold text-slate-100 uppercase tracking-wider">Thám tử phân tích</span>
@@ -1650,7 +1638,7 @@ export default function App() {
 
                 {/* Psychologist card */}
                 {(analysis.risk === "high" || analysis.risk === "medium") && (
-                  <div className="rounded-2xl border-2 border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                  <div className="rounded-2xl border border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                     <div className="bg-purple-600 dark:bg-purple-800 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-lg">🧠</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Cô tâm lý</span>
@@ -1663,7 +1651,7 @@ export default function App() {
 
                 {/* Người ứng cứu — situation question */}
                 {(analysis.risk === "high" || analysis.risk === "medium") && (
-                  <div className="rounded-2xl border-2 border-orange-200 dark:border-orange-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
+                  <div className="rounded-2xl border border-orange-200 dark:border-orange-700 bg-white dark:bg-gray-800 overflow-hidden shadow-sm">
                     <div className="bg-orange-500 dark:bg-orange-700 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-lg">🚨</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Người ứng cứu</span>
@@ -1695,7 +1683,7 @@ export default function App() {
 
                       {/* L5-05: Nothing done — short praise */}
                       {situation === "nothing" && (
-                        <div className="bg-green-50 dark:bg-green-950/40 border-2 border-green-200 dark:border-green-800 rounded-xl px-4 py-3">
+                        <div className="bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3">
                           <p className="text-sm text-green-700 dark:text-green-300 font-medium">Bạn đã làm đúng! Hãy giữ nguyên và không thực hiện bất kỳ hành động nào theo yêu cầu trong tin nhắn đó.</p>
                         </div>
                       )}
@@ -1719,14 +1707,14 @@ export default function App() {
                             <div className="space-y-2 pt-1">
                               <p className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Số điện thoại chính thức cần gọi</p>
                               <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 border-2 border-red-200 dark:border-red-800">
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800">
                                   <span className="text-base">👮</span>
                                   <div>
                                     <p className="text-xs font-bold text-red-700 dark:text-red-300">{HOTLINES.police.phone}</p>
                                     <p className="text-xs text-red-500 dark:text-red-400">{HOTLINES.police.name}</p>
                                   </div>
                                 </div>
-                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border-2 border-blue-200 dark:border-blue-800">
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
                                   <span className="text-base">🛡️</span>
                                   <div>
                                     <p className="text-xs font-bold text-blue-700 dark:text-blue-300">{HOTLINES.attt.phone}</p>
@@ -1737,7 +1725,7 @@ export default function App() {
                               <p className="text-xs font-semibold text-gray-600 dark:text-gray-300 mt-1">Hotline ngân hàng:</p>
                               <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
                                 {HOTLINES.banks.map((b) => (
-                                  <div key={b.name} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 border-2 border-gray-200 dark:border-gray-600">
+                                  <div key={b.name} className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600">
                                     <span className="text-xs text-gray-600 dark:text-gray-300 font-medium">{b.name}</span>
                                     <span className="text-xs font-bold text-[#2563eb] dark:text-blue-400">{b.phone}</span>
                                   </div>
@@ -1757,7 +1745,7 @@ export default function App() {
 
         {/* Tab: History */}
         {tab === "history" && !selectedHistory && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 p-5">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
             {history.length === 0 ? (
               <div className="text-center py-12 text-gray-600 dark:text-gray-300">
                 <div className="text-4xl mb-3">📭</div>
@@ -1781,7 +1769,7 @@ export default function App() {
                   return (
                     <div
                       key={item.id}
-                      className={`rounded-xl border-2 p-3.5 space-y-2 cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 ${c.histBorder}`}
+                      className={`rounded-xl border p-3.5 space-y-2 cursor-pointer hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:shadow-sm transition-all duration-150 ${c.histBorder}`}
                       onClick={() => setSelectedHistory(item)}
                     >
                       <div className="flex items-start justify-between gap-2">
@@ -1791,18 +1779,11 @@ export default function App() {
                         </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5">
                         {item.usedFallback ? (
                           <span className="rounded-full border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:text-yellow-200">
                             Dùng bộ phân tích dự phòng
                           </span>
-                        ) : null}
-                          {item.promptInjection?.detected && (
-                            <span className="rounded-full border border-orange-300 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/30 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:text-orange-200">
-                              Có dấu hiệu thao túng AI
-                            </span>
-                          )}
-                        </div>
+                        ) : <span />}
                         <span className="text-xs text-gray-400 dark:text-gray-300">{formatTime(item.time)}</span>
                       </div>
                     </div>
@@ -1821,9 +1802,9 @@ export default function App() {
           const itemActionItems = item.actions?.length ? item.actions : getFallbackActions(item.risk);
           const itemPsychologyText = item.psychology?.advice || getFallbackPsychology(item.risk);
           return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border-2 border-gray-100 dark:border-gray-700 overflow-hidden">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
               {/* Header */}
-              <div className={`${c.bg} ${c.border} border-b-2 px-5 py-4 flex items-center gap-3`}>
+              <div className={`${c.bg} ${c.border} border-b px-5 py-4 flex items-center gap-3`}>
                 <button
                   onClick={() => setSelectedHistory(null)}
                   className={`w-8 h-8 rounded-full border-2 ${c.border} hover:bg-black/10 dark:hover:bg-white/20 active:scale-95 transition-all duration-150 flex items-center justify-center shrink-0`}
@@ -1842,7 +1823,7 @@ export default function App() {
 
               <div className="p-5 space-y-4">
                 {item.usedFallback && (
-                  <div className="rounded-xl border-2 border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200 leading-relaxed">
+                  <div className="rounded-xl border border-yellow-200 dark:border-yellow-700 bg-yellow-50 dark:bg-yellow-900/20 px-4 py-3 text-sm text-yellow-800 dark:text-yellow-200 leading-relaxed">
                     ScamCheck đã sử dụng bộ phân tích dự phòng cho lần kiểm tra này.
                   </div>
                 )}
@@ -1852,13 +1833,13 @@ export default function App() {
                 {/* Original message */}
                 <div className="space-y-1.5">
                   <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Nội dung tin nhắn gốc</p>
-                  <div className="bg-gray-50 dark:bg-gray-900 rounded-xl border-2 border-gray-100 dark:border-gray-700 px-4 py-3 text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
+                  <div className="bg-gray-50 dark:bg-gray-900 rounded-xl px-4 py-3 text-sm text-gray-700 dark:text-gray-200 leading-relaxed whitespace-pre-wrap">
                     {highlightText(item.text, item.highlights, item.risk)}
                   </div>
                 </div>
 
                 {/* Detective card */}
-                <div className="rounded-xl border-2 border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-600 bg-white dark:bg-gray-800 overflow-hidden">
                   <div className="bg-slate-800 dark:bg-slate-900 px-4 py-2.5 flex items-center gap-2">
                     <span className="text-base">🕵️</span>
                     <span className="text-xs font-bold text-slate-100 uppercase tracking-wider">Thám tử phân tích</span>
@@ -1900,7 +1881,7 @@ export default function App() {
 
                 {/* Psychologist card */}
                 {(item.risk === "high" || item.risk === "medium") && (
-                  <div className="rounded-xl border-2 border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden">
+                  <div className="rounded-xl border border-purple-200 dark:border-purple-700 bg-white dark:bg-gray-800 overflow-hidden">
                     <div className="bg-purple-600 dark:bg-purple-800 px-4 py-2.5 flex items-center gap-2">
                       <span className="text-base">🧠</span>
                       <span className="text-xs font-bold text-white uppercase tracking-wider">Cô tâm lý</span>
@@ -1921,7 +1902,7 @@ export default function App() {
         )}
 
         {/* Legal notice */}
-        <div className="rounded-xl border-2 border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 px-5 py-4 text-xs text-blue-800 dark:text-blue-300 leading-relaxed text-center">
+        <div className="rounded-xl border border-blue-100 dark:border-blue-900 bg-blue-50 dark:bg-blue-950/40 px-5 py-4 text-xs text-blue-800 dark:text-blue-300 leading-relaxed text-center">
           <span className="font-bold">Lưu ý pháp lý:</span> ScamCheck là công cụ giáo dục do nhóm học viên FCT Club phát triển. Đánh giá của ứng dụng không thay thế cảnh báo chính thức từ ngân hàng hoặc cơ quan chức năng. Nếu nghi ngờ, người dùng nên gọi tổng đài chính thức của ngân hàng được in trên thẻ ngân hàng.
 		</div>
 		
