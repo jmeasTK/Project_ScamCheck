@@ -1,6 +1,6 @@
 # Project ScamCheck
 
-ScamCheck là dự án Hackathon cho cuộc thi Hackathon FCT 2026, giúp người dùng Việt Nam, đặc biệt là người lớn tuổi, nhận diện dấu hiệu lừa đảo trực tuyến và nhận hướng xử lý an toàn.
+ScamCheck là dự án cho cuộc thi Hackathon FCT 2026, giúp người dùng Việt Nam, đặc biệt là người lớn tuổi, nhận diện dấu hiệu lừa đảo trực tuyến và nhận hướng xử lý an toàn.
 
 ## Demo
 
